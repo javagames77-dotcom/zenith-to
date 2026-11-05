@@ -3,6 +3,14 @@
 // Фото снимается родной камерой телефона и уходит на сервер как есть,
 // без сжатия. Пока нет сети — ждёт в очереди на телефоне (IndexedDB).
 // ═══════════════════════════════════════════════════════════
+// Любая ошибка на старте показывается на экране, а не оставляет белую страницу
+function showFatal(msg) {
+  const a = document.getElementById('app');
+  if (a && !a.dataset.fatal) { a.dataset.fatal = '1'; a.innerHTML = '<div class="err" style="margin:14px">Ошибка приложения: ' + String(msg).replace(/</g, '&lt;') + '<br>Обновите страницу. Если повторяется — пришлите скриншот.</div>'; }
+}
+window.addEventListener('error', e => showFatal(e.message || 'неизвестная ошибка'));
+window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
+
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
@@ -79,27 +87,32 @@ const DB = {
   del: (store, key) => DB.tx(store, 'readwrite', s => s.delete(key)),
   all: store => DB.tx(store, 'readonly', s => s.getAll())
 };
+const cachePut = (v, k) => DB.put('cache', v, k).catch(() => {});
+const cacheGet = k => DB.get('cache', k).catch(() => null);
 // Просим браузер не чистить хранилище (важно для iOS)
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // ─── состояние ────────────────────────────────────────────
 const S = { tasks: null, task: {}, queue: [], online: navigator.onLine, syncing: false };
-async function refreshQueue() { S.queue = await DB.all('queue'); drawQueueChip(); }
+async function refreshQueue() {
+  try { S.queue = (await DB.all('queue')) || []; } catch (e) { console.warn('IndexedDB', e); S.queue = S.queue || []; }
+  drawQueueChip();
+}
 const queueFor = itemId => S.queue.filter(q => num(q.item_id) === num(itemId)).sort((a, b) => a.created - b.created);
 
 async function loadTasks() {
-  try { const d = await api('/photo/tasks'); S.tasks = d.tasks || []; await DB.put('cache', S.tasks, 'tasks'); S.online = true; }
-  catch (e) { if (!e.offline) throw e; S.online = false; S.tasks = (await DB.get('cache', 'tasks')) || []; }
+  try { const d = await api('/photo/tasks'); S.tasks = d.tasks || []; await cachePut(S.tasks, 'tasks'); S.online = true; }
+  catch (e) { if (!e.offline) throw e; S.online = false; S.tasks = (await cacheGet('tasks')) || []; }
   drawQueueChip();
   return S.tasks;
 }
 async function loadTask(id, { cachedFirst = false } = {}) {
   if (cachedFirst && S.task[id]) return S.task[id];
-  try { const d = await api('/photo/task?task_id=' + id); S.task[id] = d; await DB.put('cache', d, 'task-' + id); S.online = true; }
+  try { const d = await api('/photo/task?task_id=' + id); S.task[id] = d; await cachePut(d, 'task-' + id); S.online = true; }
   catch (e) {
     if (!e.offline) throw e;
     S.online = false;
-    const c = await DB.get('cache', 'task-' + id);
+    const c = await cacheGet('task-' + id);
     if (!c) throw new Error('Нет сети, и задание ещё не загружалось на этот телефон');
     S.task[id] = c;
   }
@@ -117,14 +130,21 @@ async function sync() {
     const list = S.queue.filter(q => q.status !== 'rejected').sort((a, b) => a.created - b.created);
     for (const q of list) {
       q.status = 'sending'; await DB.put('queue', q); drawQueueChip(); redrawItemIfOpen(q);
+      let bytes = null;
+      try { bytes = q.blob ? await q.blob.arrayBuffer() : null; } catch (_) { bytes = null; }
+      if (!bytes || !bytes.byteLength) {
+        q.status = 'rejected'; q.error = 'файл фото потерян — переснимите'; await DB.put('queue', q);
+        await refreshQueue(); redrawItemIfOpen(q); continue;
+      }
       const f = new FormData();
       f.append('photo_uid', q.photo_uid);
       f.append('item_id', String(q.item_id));
       f.append('seq', String(q.seq));
       f.append('shot_at', q.shot_at);
-      f.append('file', q.blob, q.name || ('photo-' + q.seq + '.jpg'));
+      f.append('file', new Blob([bytes], { type: q.type || 'image/jpeg' }), q.name || ('photo-' + q.seq + '.jpg'));
+      const qs = '?photo_uid=' + encodeURIComponent(q.photo_uid) + '&item_id=' + q.item_id + '&seq=' + q.seq + '&shot_at=' + encodeURIComponent(q.shot_at);
       try {
-        const r = await api('/photo/upload', { method: 'POST', form: f });
+        const r = await api('/photo/upload' + qs, { method: 'POST', form: f });
         S.online = true;
         await DB.del('queue', q.photo_uid);
         const it = findItem(q.task_id, q.item_id);
@@ -134,7 +154,7 @@ async function sync() {
             it.photos.push({ photo_uid: r.photo_uid, photo_index: r.photo_index, file_name: r.file_name, file_url: r.file_url, width: r.width, height: r.height, size_bytes: r.size_bytes, status: 'stored', seq: q.seq });
             it.photos_stored = num(it.photos_stored) + 1;
           }
-          await DB.put('cache', S.task[q.task_id], 'task-' + q.task_id);
+          await cachePut(S.task[q.task_id], 'task-' + q.task_id);
         }
       } catch (e) {
         if (e.offline) { S.online = false; q.status = 'wait'; await DB.put('queue', q); break; }
@@ -347,10 +367,15 @@ function takePhoto(taskId, it, n) {
         : 'Нужен JPEG или PNG, получено: ' + (file.type || 'неизвестный формат'), 5000);
       return;
     }
+    // iPhone отдаёт снимок как ссылку на временный файл, который потом исчезает.
+    // Поэтому сразу читаем байты и храним в очереди сами данные (без пересжатия).
+    let data;
+    try { data = await file.arrayBuffer(); } catch (_) { data = null; }
+    if (!data || !data.byteLength) { toast('Не удалось прочитать фото, снимите ещё раз', 4000); return; }
     const q = {
       photo_uid: uuid(), task_id: num(taskId), item_id: num(it.id),
       seq: n + 1, shot_at: new Date().toISOString(), created: Date.now(),
-      blob: file, name: file.name, type: file.type, size: file.size, status: 'wait'
+      blob: new Blob([data], { type: file.type }), name: file.name || 'photo.jpg', type: file.type, size: data.byteLength, status: 'wait'
     };
     await DB.put('queue', q);
     await refreshQueue();
@@ -370,7 +395,7 @@ async function setStatus(taskId, it, status, n) {
   try {
     await api('/photo/item-status', { method: 'POST', body: { item_id: num(it.id), status, comment } });
     it.status = status; it.comment = comment;
-    await DB.put('cache', S.task[taskId], 'task-' + taskId);
+    await cachePut(S.task[taskId], 'task-' + taskId);
     vibrate([20, 40, 20]);
     toast(status === 'done' ? 'Готово: ' + it.article : 'Отмечено: нет на приёмке');
     location.hash = '#task-' + taskId;
@@ -509,4 +534,9 @@ function onScan(d, taskId, text) {
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
-refreshQueue().then(() => { route(); sync(); });
+// Старт не зависит от хранилища: даже если IndexedDB недоступна, интерфейс рисуется.
+(async () => {
+  try { await Promise.race([refreshQueue(), new Promise(r => setTimeout(r, 2500))]); } catch (e) { console.warn('queue', e); }
+  route();
+  sync().catch(() => {});
+})();
