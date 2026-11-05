@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Зеніт-Авто.фото — администратор</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=PT+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8; --sf: #ffffff; --chip: #f1f2f4; --bd: #e7e7ea; --tx: #111318; --mu: #6b7280;
+  --or: #F38435; --on-or: #111318; --or-soft: #fff1e6;
+  --ok: #15803d; --ok-bg: #e8f6ee; --er: #b42318; --er-bg: #fdecec; --wa: #9a4208; --wa-bg: #fff1e6; --bl: #2563eb; --bl-bg: #eef3ff;
+  --logo-bg: transparent; --shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1115; --sf: #171a20; --chip: #232832; --bd: #2c323d; --tx: #e8eaee; --mu: #9aa3b2; --or-soft: #3a2414;
+    --ok: #5dd39e; --ok-bg: #173226; --er: #ff8a80; --er-bg: #3a1c1c; --wa: #ffb27a; --wa-bg: #3a2414; --bl: #8fb0ff; --bl-bg: #1a2440;
+    --logo-bg: #ffffff; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--tx); font: 14px/1.45 "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--bl); }
+.mono { font-family: "PT Mono", ui-monospace, monospace; font-size: 12.5px; }
+.mu { color: var(--mu); }
+.nw { white-space: nowrap; }
+
+/* каркас */
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--sf); border-bottom: 1px solid var(--bd); }
+.top .logo { display: inline-flex; background: var(--logo-bg); border-radius: 6px; padding: 1px; }
+.top .logo svg { height: 30px; width: auto; display: block; }
+.top b { font-size: 17px; letter-spacing: -.01em; }
+.top b span { color: var(--or); }
+.top .r { margin-left: auto; color: var(--mu); font-size: 12.5px; }
+.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: calc(100vh - 51px); }
+.side { background: var(--sf); border-right: 1px solid var(--bd); padding: 12px 10px; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 10px; color: var(--tx); text-decoration: none; margin-bottom: 2px; }
+.side a:hover { background: var(--chip); }
+.side a.on { background: var(--or-soft); color: var(--wa); font-weight: 700; box-shadow: inset 3px 0 0 var(--or); }
+.side a.soon { color: var(--mu); }
+.side a.soon::after { content: "скоро"; font-size: 10.5px; background: var(--chip); border-radius: 999px; padding: 0 7px; }
+main { padding: 20px 24px 40px; min-width: 0; }
+main:focus { outline: none; }
+.hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.hd h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.hd .sub { color: var(--mu); margin-top: 2px; }
+.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crumb { font-size: 13px; margin-bottom: 6px; }
+.crumb a { color: var(--mu); text-decoration: none; }
+.crumb a:hover { color: var(--tx); }
+
+/* элементы */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--bd); background: var(--sf); color: var(--tx); font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn:hover { border-color: var(--mu); }
+.btn.pri { background: var(--or); border-color: var(--or); color: var(--on-or); font-weight: 700; }
+.btn.pri:hover { filter: brightness(1.05); }
+.btn.sm { min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+.in { min-height: 38px; border: 1px solid var(--bd); border-radius: 10px; background: var(--sf); padding: 0 12px; min-width: 0; }
+textarea.in { padding: 8px 12px; min-height: 64px; width: 100%; resize: vertical; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--tx); white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.wa { background: var(--wa-bg); color: var(--wa); } .pill.er { background: var(--er-bg); color: var(--er); } .pill.bl { background: var(--bl-bg); color: var(--bl); }
+.card { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+.kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi div { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 10px 14px; color: var(--mu); font-size: 12.5px; }
+.kpi b { display: block; font-size: 24px; color: var(--tx); line-height: 1.2; }
+.kpi .ok b { color: var(--ok); } .kpi .wa b { color: var(--wa); } .kpi .er b { color: var(--er); }
+.prog { display: inline-block; width: 110px; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; vertical-align: middle; }
+.prog i { display: block; height: 100%; background: var(--or); }
+.prog.wide { width: 260px; }
+.tw { overflow-x: auto; background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--bd); text-align: left; vertical-align: middle; }
+th { color: var(--mu); font-weight: 600; font-size: 12px; background: var(--sf); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--chip); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--bd); margin-bottom: 12px; flex-wrap: wrap; }
+.tabs button { border: 0; background: none; padding: 8px 12px; color: var(--mu); cursor: pointer; font-weight: 500; }
+.tabs button.on { color: var(--tx); font-weight: 700; box-shadow: inset 0 -2px 0 var(--or); }
+.thumbs { display: inline-flex; gap: 4px; align-items: center; }
+.thumbs img, .thumbs span.ph { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; background: var(--chip); display: block; }
+.thumbs img.first { box-shadow: 0 0 0 1.5px var(--or); }
+.thumbs em { font-style: normal; color: var(--mu); font-size: 12px; margin-left: 2px; }
+.empty { text-align: center; padding: 40px 20px; color: var(--mu); }
+.loading { padding: 40px; text-align: center; color: var(--mu); }
+.err { background: var(--er-bg); color: var(--er); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+.note { background: var(--wa-bg); color: var(--wa); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+
+/* импорт */
+.drop { display: block; border: 2px dashed var(--bd); border-radius: 14px; padding: 34px 20px; text-align: center; background: var(--sf); cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--or); background: var(--or-soft); }
+.drop b { display: block; font-size: 16px; margin-bottom: 4px; }
+.drop span { display: block; }
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--mu); }
+
+/* карточка товара */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.gal figure { margin: 0; background: var(--sf); border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; cursor: zoom-in; }
+.gal figure.first { box-shadow: 0 0 0 2px var(--or); }
+.gal img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--chip); }
+.gal figcaption { padding: 7px 9px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+.gal figcaption .fn { font-family: "PT Mono", ui-monospace, monospace; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 10px; font-size: 13px; }
+.kv > span:nth-child(odd) { color: var(--mu); }
+.st { font-weight: 700; margin: 0 0 10px; }
+.acts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+
+/* просмотр фото */
+.lb { position: fixed; inset: 0; z-index: 50; background: rgba(10,12,16,.88); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+.lb.on { display: flex; }
+.lb img { max-width: 100%; max-height: calc(100vh - 120px); border-radius: 8px; background: #fff; }
+.lb .cap { color: #e8eaee; margin-top: 10px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.lb .cap a { color: #ffb27a; }
+.lb .x { position: absolute; top: 14px; right: 18px; background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 10px; width: 40px; height: 40px; font-size: 20px; cursor: pointer; }
+.lb .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 10px; width: 44px; height: 64px; font-size: 22px; cursor: pointer; }
+.lb .nav.l { left: 14px; } .lb .nav.r { right: 14px; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--tx); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+.toast.on { opacity: 1; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--bd); padding: 8px; }
+  .side a { flex: none; margin: 0; }
+  .side a.soon { display: none; }
+  .split { grid-template-columns: 1fr; }
+  main { padding: 16px 14px 40px; }
+  .prog.wide { width: 160px; }
+}
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg"><symbol id="logo" viewBox="0 0 384 462"><g transform="translate(0,473) scale(0.1,-0.1)"><path fill="#000000" d="M1415 3698 c-3 -29 -15 -116 -26 -192 -11 -76 -18 -141 -15 -143 2 -2 33 4 69 13 l66 16 -17 26 c-27 42 -23 136 9 194 l27 46 -27 24 c-14 13 -38 34 -52 46 l-27 24 -7 -54z"></path><path fill="#000000" d="M1174 3567 c-82 -85 -168 -178 -192 -209 l-42 -55 35 -72 36 -72 38 33 c21 18 67 50 102 70 35 20 80 46 100 58 l37 22 21 167 c12 91 24 176 27 189 2 12 0 22 -5 22 -5 0 -76 -69 -157 -153z"></path><path fill="#000000" d="M858 3082 c31 -42 49 -56 54 -40 3 7 -13 26 -35 41 l-39 29 20 -30z"></path><path fill="#000000" d="M727 3023 c-70 -101 -141 -215 -205 -332 l-52 -94 112 7 c62 4 115 9 119 12 14 8 76 130 94 184 10 30 32 85 50 121 l32 66 -45 54 c-24 30 -45 55 -47 57 -2 2 -27 -32 -58 -75z"></path><path fill="#000000" d="M565 2521 l-30 -6 47 -27 c37 -20 54 -25 75 -19 21 6 37 3 61 -12 l33 -19 -3 43 -3 44 -75 2 c-41 0 -88 -2 -105 -6z"></path><path fill="#000000" d="M520 2394 c-52 -14 -112 -29 -132 -35 -31 -8 -41 -17 -58 -56 -55 -126 -166 -460 -156 -470 2 -3 87 61 187 142 l183 147 17 84 c10 47 27 113 38 146 12 34 20 63 18 64 -1 1 -45 -9 -97 -22z"></path><path fill="#000000" d="M700 2393 c-6 -16 -15 -39 -20 -53 -17 -46 -50 -174 -50 -197 0 -22 6 -26 243 -158 l69 -38 -47 69 c-68 99 -120 228 -139 344 -4 20 -15 41 -26 48 -18 11 -21 9 -30 -15z"></path><path fill="#000000" d="M2045 2218 c-48 -76 -142 -194 -243 -306 l-76 -83 26 -52 c14 -29 91 -192 173 -364 l148 -312 95 87 c184 168 413 437 568 667 103 152 197 306 190 312 -5 6 -655 95 -776 108 l-65 6 -40 -63z"></path><path fill="#000000" d="M2941 1972 c-190 -305 -372 -535 -624 -786 -93 -92 -165 -172 -160 -176 4 -4 111 -81 236 -170 l228 -161 67 59 c108 96 293 291 382 402 103 130 201 276 290 432 l70 122 -33 36 c-18 19 -98 105 -177 190 -78 85 -153 165 -165 178 l-22 23 -92 -149z"></path><path fill="#000000" d="M380 1888 l-202 -162 70 -35 70 -34 166 121 c92 67 170 122 175 122 4 0 46 -27 94 -60 47 -33 88 -60 91 -60 3 0 29 16 57 36 l50 37 -178 98 c-98 54 -181 99 -184 99 -4 0 -98 -73 -209 -162z"></path><path fill="#000000" d="M707 1763 c15 -98 18 -102 173 -205 80 -53 148 -97 152 -97 3 -1 4 7 2 17 -2 9 -5 35 -7 57 -2 22 -6 45 -10 52 -10 16 -293 213 -306 213 -6 0 -7 -15 -4 -37z"></path><path fill="#000000" d="M370 1632 l-215 -158 -18 -84 c-20 -94 -36 -392 -20 -375 6 6 123 145 261 311 l251 300 -14 49 c-8 26 -15 63 -15 82 0 18 -3 33 -7 33 -5 -1 -105 -72 -223 -158z"></path><path fill="#000000" d="M1437 1604 c-72 -48 -207 -118 -266 -139 l-36 -12 -154 -502 c-85 -276 -152 -504 -148 -507 9 -9 236 52 343 92 155 57 435 201 510 262 l21 17 -97 405 c-53 223 -98 410 -101 417 -2 8 -28 -4 -72 -33z"></path><path fill="#000000" d="M1632 1589 c3 -8 45 -183 93 -389 72 -305 93 -378 109 -390 35 -25 390 -252 403 -257 6 -3 -22 94 -63 214 -55 160 -82 223 -99 238 -22 18 -71 113 -180 351 -30 66 -40 76 -136 151 -123 94 -134 102 -127 82z"></path><path fill="#000000" d="M427 1218 l-269 -322 27 -13 c24 -13 28 -12 44 9 10 13 119 158 241 323 122 165 227 306 233 313 5 6 6 12 1 12 -5 0 -130 -145 -277 -322z"></path><path fill="#000000" d="M463 1118 c-148 -200 -272 -368 -276 -375 -12 -20 31 -92 89 -150 38 -38 80 -66 139 -94 47 -22 93 -39 102 -37 11 2 75 150 209 483 l192 480 -49 7 c-27 5 -67 17 -89 28 -22 11 -41 20 -44 20 -2 0 -125 -163 -273 -362z"></path><path fill="#000000" d="M832 922 c-105 -262 -194 -484 -197 -492 -4 -11 10 -23 51 -43 31 -15 57 -27 59 -25 5 6 305 995 305 1005 0 6 -6 15 -13 21 -10 9 -52 -87 -205 -466z"></path><path fill="#000000" d="M1635 640 c-71 -44 -186 -105 -255 -136 -112 -51 -346 -133 -425 -150 -27 -5 -8 -17 185 -114 l215 -109 75 5 c167 11 359 60 555 143 100 43 270 131 262 136 -14 12 -464 298 -472 301 -5 1 -68 -33 -140 -76z"></path><path fill="#000000" d="M310 488 c29 -24 494 -254 654 -322 204 -87 159 -55 -109 78 -148 74 -312 149 -364 168 -52 18 -120 47 -150 65 -34 20 -46 25 -31 11z"></path><path fill="#F38435" d="M3515 4609 c-185 -32 -358 -85 -478 -145 -195 -98 -377 -307 -572 -658 -21 -38 -76 -151 -121 -250 -70 -152 -87 -180 -106 -182 -13 -1 -61 -5 -108 -8 l-86 -5 -40 52 c-22 29 -67 75 -101 102 l-60 50 214 318 c118 175 223 337 233 360 37 80 18 170 -42 207 -46 28 -89 26 -393 -15 -368 -50 -391 -54 -426 -78 -57 -39 -74 -71 -74 -142 0 -54 4 -68 23 -87 30 -31 87 -31 327 -2 104 12 191 21 193 19 2 -2 -155 -249 -315 -492 -42 -65 -63 -114 -63 -149 0 -40 29 -93 66 -118 l33 -22 -102 -23 c-235 -52 -356 -110 -473 -226 -86 -85 -131 -154 -181 -275 -46 -113 -65 -210 -65 -335 -1 -234 81 -430 239 -575 119 -109 283 -169 427 -156 69 6 156 25 156 33 0 2 -5 13 -11 24 -9 17 1 32 77 112 110 116 223 257 293 367 30 47 54 86 55 86 1 1 26 -2 56 -6 46 -7 57 -5 70 9 8 10 94 153 190 318 l175 301 45 6 c25 3 118 8 207 12 l161 7 -119 -364 c-65 -199 -116 -365 -114 -368 3 -2 80 -14 171 -27 152 -21 169 -25 195 -50 16 -15 30 -26 32 -23 2 2 65 182 140 399 75 217 141 409 147 426 l11 31 145 7 c168 8 230 26 289 83 72 70 93 158 55 241 -15 34 -29 47 -66 63 -42 19 -58 20 -165 14 l-119 -7 16 43 c9 24 83 238 166 474 122 347 151 441 152 487 1 69 -20 103 -84 136 -55 28 -122 28 -275 1z m-195 -456 c0 -5 -55 -168 -122 -364 l-122 -355 -174 -13 c-96 -6 -176 -10 -178 -8 -8 8 267 533 304 581 20 27 62 66 92 86 78 53 200 97 200 73z m-1430 -1074 c60 -9 190 -60 190 -74 0 -3 -71 -128 -159 -278 -87 -150 -178 -306 -202 -347 -49 -86 -118 -159 -179 -190 -24 -12 -69 -25 -100 -27 -73 -7 -144 23 -201 84 -112 122 -129 314 -43 494 46 96 81 137 173 207 147 111 342 160 521 131z"></path><path fill="#F38435" d="M3190 2114 c0 -9 294 -324 302 -324 15 0 61 82 68 118 3 20 2 57 -2 82 -9 54 -57 103 -115 119 -39 11 -253 15 -253 5z"></path></g></symbol></svg>
+
+<header class="top">
+  <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
+  <b>Зеніт-Авто<span>.фото</span></b>
+  <span class="r">Пилот · администратор</span>
+</header>
+
+<div class="layout">
+  <nav class="side" aria-label="Разделы">
+    <a href="#tasks" data-nav="tasks">Задания</a>
+    <a href="#new" data-nav="new">Новое задание</a>
+    <a class="soon" aria-disabled="true">Каталог</a>
+    <a class="soon" aria-disabled="true">Связки кодов</a>
+    <a class="soon" aria-disabled="true">Пользователи</a>
+    <a class="soon" aria-disabled="true">Журнал</a>
+  </nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Просмотр фото">
+  <button class="x" type="button" aria-label="Закрыть" data-lb="close">×</button>
+  <button class="nav l" type="button" aria-label="Предыдущее фото" data-lb="prev">‹</button>
+  <img id="lb-img" alt="">
+  <div class="cap" id="lb-cap"></div>
+  <button class="nav r" type="button" aria-label="Следующее фото" data-lb="next">›</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// Зеніт-Авто.фото — админка (пилот)
+// ═══════════════════════════════════════════════════════════
+const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
+const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
+const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
+
+// ─── API ──────────────────────────────────────────────────
+async function api(path, { method = 'GET', body } = {}) {
+  let res;
+  try {
+    res = await fetch(API_BASE + path, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (e) {
+    throw new Error('Нет связи с сервером');
+  }
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok || !data || data.success === false) {
+    throw new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+  }
+  return data;
+}
+
+// ─── утилиты ──────────────────────────────────────────────
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const num = v => Number(v) || 0;
+const fmtDate = s => s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmtMB = b => b ? (b / 1048576).toFixed(b < 1048576 ? 2 : 1) + ' МБ' : '—';
+const fmtMP = (w, h) => w && h ? ((w * h) / 1e6).toFixed(1) + ' Мп' : '—';
+function cld(url, t) { return url ? url.replace('/image/upload/', '/image/upload/' + t + '/') : ''; }
+const thumbUrl = u => cld(u, 'c_fill,w_120,h_120,q_auto,f_auto');
+const midUrl = u => cld(u, 'c_fill,w_420,h_420,q_auto,f_auto');
+const bigUrl = u => cld(u, 'c_limit,w_1800,h_1800,q_auto,f_auto');
+const lowRes = p => p.width && p.height && Math.max(p.width, p.height) < LOW_RES_PX;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+function todayTitle() { return 'Приёмка ' + new Date().toLocaleDateString('ru-RU'); }
+
+function itemFlags(it) {
+  const f = [];
+  const n = num(it.photos_stored);
+  if (it.status === 'done' && n < MIN_PHOTOS) f.push(['er', n + ' фото']);
+  if (n > MAX_PHOTOS) f.push(['wa', 'больше ' + MAX_PHOTOS + ' фото']);
+  if (num(it.photos_pending)) f.push(['wa', 'в очереди ' + it.photos_pending]);
+  if ((it.photos || []).some(lowRes)) f.push(['wa', 'низкое разрешение']);
+  return f;
+}
+function statusPill(it) {
+  if (it.status === 'done') return '<span class="pill ok">снят</span>';
+  if (it.status === 'absent') return '<span class="pill er">нет на приёмке</span>';
+  if (num(it.photos_stored)) return '<span class="pill bl">снимается</span>';
+  return '<span class="pill">не снят</span>';
+}
+
+// ─── маршруты ─────────────────────────────────────────────
+const view = $('#view');
+const routes = [
+  [/^#?(tasks)?$/, () => viewTasks()],
+  [/^#new$/, () => viewNew()],
+  [/^#task-(\d+)$/, m => viewTask(m[1])],
+  [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])]
+];
+function navOn(key) { document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key)); }
+function route() {
+  const h = location.hash || '#tasks';
+  for (const [re, fn] of routes) { const m = h.match(re); if (m) { fn(m); view.focus({ preventScroll: true }); window.scrollTo(0, 0); return; } }
+  location.hash = '#tasks';
+}
+window.addEventListener('hashchange', route);
+function loading(text = 'Загрузка…') { view.innerHTML = '<div class="loading">' + esc(text) + '</div>'; }
+function showError(e, retry) {
+  view.innerHTML = '<div class="err">' + esc(e.message || e) + '</div>' + (retry ? '<button class="btn" type="button" id="retry">Повторить</button>' : '');
+  if (retry) $('#retry').onclick = retry;
+}
+
+// ─── Задания ──────────────────────────────────────────────
+async function viewTasks() {
+  navOn('tasks'); loading();
+  let data;
+  try { data = await api('/photo/tasks'); } catch (e) { return showError(e, viewTasks); }
+  const tasks = data.tasks || [];
+  const open = tasks.filter(t => t.status === 'open');
+  const sum = (arr, k) => arr.reduce((s, t) => s + num(t[k]), 0);
+  view.innerHTML = `
+    <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
+      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
+    <div class="kpi">
+      <div>Товаров в работе<b>${sum(open, 'items_total')}</b></div>
+      <div class="ok">Снято товаров<b>${sum(open, 'items_done')}</b></div>
+      <div>Фото загружено<b>${sum(open, 'photos_stored')}</b></div>
+      <div class="wa">В очереди<b>${sum(open, 'photos_pending')}</b></div>
+      <div class="er">Мало фото<b>${sum(open, 'items_few_photos')}</b></div>
+    </div>
+    ${tasks.length ? `<div class="tw"><table>
+      <thead><tr><th>Задание</th><th>Фотограф</th><th>Снято</th><th>Фото</th><th>Статус</th><th>Флаги</th></tr></thead>
+      <tbody>${tasks.map(t => {
+        const total = num(t.items_total), done = num(t.items_done), pct = total ? Math.round(done / total * 100) : 0;
+        const flags = [];
+        if (num(t.items_few_photos)) flags.push(`<span class="pill er">${t.items_few_photos} мало фото</span>`);
+        if (num(t.items_absent)) flags.push(`<span class="pill">${t.items_absent} нет на приёмке</span>`);
+        if (num(t.photos_pending)) flags.push(`<span class="pill wa">${t.photos_pending} в очереди</span>`);
+        return `<tr class="click" data-href="#task-${num(t.id)}" tabindex="0">
+          <td><b>${esc(t.title)}</b><div class="mu">${esc(t.file_name || 'без файла')} · ${fmtDate(t.created_at)}</div></td>
+          <td class="nw">${esc(t.photographer || '—')}</td>
+          <td class="nw"><span class="prog"><i style="width:${pct}%"></i></span> ${done} / ${total}</td>
+          <td class="nw">${num(t.photos_stored)}</td>
+          <td>${t.status === 'open' ? '<span class="pill bl">в работе</span>' : '<span class="pill ok">закрыто</span>'}</td>
+          <td>${flags.join(' ') || '<span class="mu">—</span>'}</td></tr>`;
+      }).join('')}</tbody></table></div>`
+      : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}`;
+  $('#refresh').onclick = viewTasks;
+  bindRowLinks();
+}
+function bindRowLinks() {
+  view.querySelectorAll('tr[data-href]').forEach(tr => {
+    tr.onclick = () => { location.hash = tr.dataset.href; };
+    tr.onkeydown = e => { if (e.key === 'Enter') location.hash = tr.dataset.href; };
+  });
+}
+
+// ─── Новое задание из Excel ───────────────────────────────
+const HEADERS = {
+  row_no: ['№з/п', '№п/п', '№', 'n'],
+  code_1c: ['код1с8', 'код1с', 'код'],
+  name: ['номенклатура', 'наименование', 'назва'],
+  cell: ['осн.комірка', 'осн.ячейка', 'комірка', 'ячейка'],
+  article: ['артикул'],
+  brand: ['бренд', 'производитель', 'виробник'],
+  barcode: ['штрихкод', 'штрих-код', 'ean']
+};
+const normH = s => String(s || '').toLowerCase().replace(/\s+/g, '');
+function findCols(row) {
+  const cols = {};
+  row.forEach((cell, i) => {
+    const h = normH(cell);
+    if (!h) return;
+    for (const [key, aliases] of Object.entries(HEADERS)) {
+      if (cols[key] !== undefined) continue;
+      if (aliases.some(a => key === 'row_no' ? h === a || h.startsWith(a) && h.length <= 5 : h.startsWith(a))) { cols[key] = i; break; }
+    }
+  });
+  return cols;
+}
+function parseSheet(wb) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: false });
+  let hi = -1, cols = null;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const c = findCols(rows[i]);
+    if (c.code_1c !== undefined && c.article !== undefined) { hi = i; cols = c; break; }
+  }
+  if (hi < 0) throw new Error('Не найдены колонки «Код1С8» и «Артикул» в первых 20 строках первого листа');
+  const get = (r, k) => cols[k] === undefined ? '' : String(r[cols[k]] ?? '').trim();
+  const out = [];
+  for (let i = hi + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const it = { row_no: get(r, 'row_no'), code_1c: get(r, 'code_1c'), name: get(r, 'name'), article: get(r, 'article'), brand: get(r, 'brand'), cell: get(r, 'cell'), barcode: get(r, 'barcode'), _line: i + 1 };
+    if (!it.code_1c && !it.article) continue;       // пустые строки с формулами
+    out.push(it);
+  }
+  // проверки как в шаблоне Excel
+  const seenCode = new Map(), seenArt = new Map();
+  for (const it of out) {
+    it._issues = [];
+    if (!it.code_1c) it._issues.push(['er', 'нет кода 1С']);
+    if (!it.article) it._issues.push(['er', 'нет артикула']);
+    if (it.code_1c) {
+      if (seenCode.has(it.code_1c)) it._issues.push(['er', 'дубль кода 1С (строка ' + seenCode.get(it.code_1c) + ')']);
+      else seenCode.set(it.code_1c, it._line);
+    }
+    const an = it.article.toUpperCase().replace(/[\s./-]/g, '');
+    if (an) {
+      if (seenArt.has(an)) it._issues.push(['wa', 'дубль артикула (строка ' + seenArt.get(an) + ')']);
+      else seenArt.set(an, it._line);
+    }
+    it._level = it._issues.some(x => x[0] === 'er') ? 'er' : it._issues.length ? 'wa' : 'ok';
+  }
+  return { items: out, sheet: wb.SheetNames[0], cols: Object.keys(cols) };
+}
+
+function viewNew() {
+  navOn('new');
+  view.innerHTML = `
+    <div class="crumb"><a href="#tasks">← Задания</a></div>
+    <div class="hd"><div><h1>Новое задание из Excel</h1><div class="sub">Шаблон «Список товаров для фото на приёмке». Колонки ищутся по названию, пустые строки пропускаются.</div></div></div>
+    <label class="drop" id="drop" tabindex="0">
+      <b>Выберите файл Excel или перетащите сюда</b>
+      <span class="mu">.xlsx или .xls · используется первый лист</span>
+      <input type="file" id="file" accept=".xlsx,.xls" hidden>
+    </label>
+    <div id="preview"></div>`;
+  const drop = $('#drop'), input = $('#file');
+  drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
+  input.onchange = () => input.files[0] && readFile(input.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); };
+}
+async function readFile(file) {
+  const pv = $('#preview');
+  pv.innerHTML = '<div class="loading">Читаю файл…</div>';
+  if (typeof XLSX === 'undefined') { pv.innerHTML = '<div class="err">Библиотека чтения Excel не загрузилась. Проверьте интернет и обновите страницу.</div>'; return; }
+  let parsed;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    parsed = parseSheet(wb);
+  } catch (e) { pv.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return; }
+  $('#drop').hidden = true;
+  renderPreview(file, parsed);
+}
+function renderPreview(file, parsed) {
+  const pv = $('#preview');
+  const items = parsed.items;
+  const ok = items.filter(i => i._level === 'ok').length;
+  const wa = items.filter(i => i._level === 'wa').length;
+  const er = items.filter(i => i._level === 'er').length;
+  const toSend = items.filter(i => i._level !== 'er');
+  let filter = er ? 'issues' : 'all';
+  pv.innerHTML = `
+    <div style="height:14px"></div>
+    <div class="kpi">
+      <div>Строк с товарами<b>${items.length}</b></div>
+      <div class="ok">Готово к съёмке<b>${ok}</b></div>
+      <div class="wa">Предупреждения<b>${wa}</b></div>
+      <div class="er">Ошибки<b>${er}</b></div>
+    </div>
+    ${er ? `<div class="note">Строки с ошибками (${er}) не попадут в задание. Исправьте их в Excel и загрузите файл заново или создайте задание без них.</div>` : ''}
+    <div class="card" style="margin-bottom:12px">
+      <div class="form">
+        <label>Название задания<input class="in" id="f-title" value="${esc(todayTitle())}"></label>
+        <label>Фотограф<input class="in" id="f-ph" placeholder="Например, Мельник А."></label>
+        <label>Файл<input class="in" value="${esc(file.name)} · лист «${esc(parsed.sheet)}»" disabled></label>
+      </div>
+      <div class="bar"><button class="btn pri" type="button" id="create" ${toSend.length ? '' : 'disabled'}>Создать задание · ${toSend.length} ${plural(toSend.length, 'товар', 'товара', 'товаров')}</button>
+        <button class="btn" type="button" id="again">Другой файл</button></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" data-f="all">Все ${items.length}</button>
+      <button type="button" data-f="issues">С замечаниями ${wa + er}</button>
+    </div>
+    <div class="tw"><table><thead><tr><th>Строка</th><th>№</th><th>Код 1С</th><th>Артикул</th><th>Бренд</th><th>Номенклатура</th><th>Проверка</th></tr></thead><tbody id="pv-body"></tbody></table></div>`;
+  const body = $('#pv-body');
+  function draw() {
+    pv.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
+    const list = filter === 'issues' ? items.filter(i => i._level !== 'ok') : items;
+    body.innerHTML = list.slice(0, 1000).map(i => `<tr>
+      <td class="mu">${i._line}</td><td>${esc(i.row_no)}</td><td class="mono nw">${esc(i.code_1c)}</td><td class="mono nw"><b>${esc(i.article)}</b></td>
+      <td>${esc(i.brand)}</td><td>${esc(i.name)}</td>
+      <td>${i._issues.length ? i._issues.map(x => `<span class="pill ${x[0]}">${esc(x[1])}</span>`).join(' ') : '<span class="pill ok">ок</span>'}</td></tr>`).join('')
+      || '<tr><td colspan="7" class="empty">Замечаний нет</td></tr>';
+  }
+  pv.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+  draw();
+  $('#again').onclick = () => { $('#file').value = ''; $('#file').click(); };
+  $('#create').onclick = async () => {
+    const title = $('#f-title').value.trim();
+    if (!title) { toast('Укажите название задания'); $('#f-title').focus(); return; }
+    const btn = $('#create'); btn.disabled = true; btn.textContent = 'Создаю…';
+    try {
+      const r = await api('/photo/admin/import', { method: 'POST', body: {
+        title, file_name: file.name, photographer: $('#f-ph').value.trim(),
+        items: toSend.map(i => ({ row_no: i.row_no, code_1c: i.code_1c, name: i.name, article: i.article, brand: i.brand, cell: i.cell }))
+      }});
+      toast('Задание создано: ' + r.items_created + ' ' + plural(r.items_created, 'товар', 'товара', 'товаров'));
+      location.hash = '#task-' + r.task_id;
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Создать задание';
+      toast(e.message);
+    }
+  };
+}
+function plural(n, a, b, c) { n = Math.abs(n) % 100; const d = n % 10; if (n > 10 && n < 20) return c; if (d > 1 && d < 5) return b; if (d === 1) return a; return c; }
+
+// ─── Задание: товары ──────────────────────────────────────
+const taskCache = {};
+let taskFilter = 'all', taskSearch = '';
+async function loadTask(id) { const d = await api('/photo/task?task_id=' + id); taskCache[id] = d; return d; }
+async function viewTask(id) {
+  navOn('tasks');
+  if (!taskCache[id]) loading();
+  let d;
+  try { d = await loadTask(id); } catch (e) { return showError(e, () => viewTask(id)); }
+  const t = d.task, items = d.items || [];
+  const done = items.filter(i => i.status === 'done').length;
+  const absent = items.filter(i => i.status === 'absent').length;
+  const todo = items.filter(i => i.status === 'todo').length;
+  const flagged = items.filter(i => itemFlags(i).length).length;
+  const pct = items.length ? Math.round(done / items.length * 100) : 0;
+  view.innerHTML = `
+    <div class="crumb"><a href="#tasks">← Задания</a></div>
+    <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.photographer ? ' · фотограф ' + esc(t.photographer) : ''}</div></div>
+      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+    <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
+    <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
+    <div class="tabs" role="tablist">
+      <button type="button" data-f="all">Все ${items.length}</button>
+      <button type="button" data-f="todo">Не сняты ${todo}</button>
+      <button type="button" data-f="done">Сняты ${done}</button>
+      <button type="button" data-f="absent">Нет на приёмке ${absent}</button>
+      <button type="button" data-f="flags">С флагами ${flagged}</button>
+    </div>
+    <div class="tw"><table><thead><tr><th>№</th><th>Артикул · код 1С</th><th>Номенклатура</th><th>Фото</th><th>Статус и флаги</th></tr></thead><tbody id="items"></tbody></table></div>`;
+  const body = $('#items');
+  function draw() {
+    view.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
+    const q = taskSearch.trim().toUpperCase();
+    const qn = q.replace(/[\s./-]/g, '');
+    let list = items;
+    if (taskFilter === 'flags') list = list.filter(i => itemFlags(i).length);
+    else if (taskFilter !== 'all') list = list.filter(i => i.status === taskFilter);
+    if (q) list = list.filter(i => (i.article_norm || '').includes(qn) || (i.code_1c || '').toUpperCase().includes(q) || (i.name || '').toUpperCase().includes(q));
+    body.innerHTML = list.map(i => {
+      const ph = (i.photos || []).filter(p => p.file_url);
+      const th = ph.slice(0, 5).map((p, k) => `<img src="${esc(thumbUrl(p.file_url))}" alt="" loading="lazy" class="${k === 0 ? 'first' : ''}">`).join('');
+      return `<tr class="click" data-href="#item-${num(t.id)}-${num(i.id)}" tabindex="0">
+        <td class="mu">${esc(i.row_no ?? '')}</td>
+        <td class="nw"><b class="mono">${esc(i.article)}</b> <span class="mu">${esc(i.brand || '')}</span><div class="mu mono">${esc(i.code_1c)}</div></td>
+        <td>${esc(i.name || '')}</td>
+        <td class="nw">${ph.length ? `<span class="thumbs">${th}${ph.length > 5 ? '<em>+' + (ph.length - 5) + '</em>' : ''}</span>` : '<span class="mu">—</span>'}</td>
+        <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</td></tr>`;
+    }).join('') || '<tr><td colspan="5" class="empty">Ничего не найдено</td></tr>';
+    bindRowLinks();
+  }
+  view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
+  $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
+  $('#refresh').onclick = () => viewTask(id);
+  draw();
+}
+
+// ─── Карточка товара ──────────────────────────────────────
+async function viewItem(taskId, itemId) {
+  navOn('tasks');
+  let d = taskCache[taskId];
+  if (!d) { loading(); try { d = await loadTask(taskId); } catch (e) { return showError(e, () => viewItem(taskId, itemId)); } }
+  const it = (d.items || []).find(i => num(i.id) === num(itemId));
+  if (!it) return showError(new Error('Товар не найден в задании'));
+  const photos = (it.photos || []).filter(p => p.file_url);
+  const n = photos.length;
+  view.innerHTML = `
+    <div class="crumb"><a href="#task-${num(taskId)}">← ${esc(d.task.title)}</a></div>
+    <div class="hd"><div><h1><span class="mono" style="font-size:22px">${esc(it.article)}</span> <span class="mu" style="font-size:15px;font-weight:400">${esc(it.brand || '')}</span></h1>
+      <div class="sub">${esc(it.name || '')} · код 1С ${esc(it.code_1c)}</div></div>
+      <div class="bar">${statusPill(it)} ${itemFlags(it).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</div></div>
+    <div class="split">
+      <div class="card">
+        <div class="bar" style="justify-content:space-between;margin-bottom:10px"><b>Фото · ${n}</b>
+          <span class="mu">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки</span></div>
+        ${n < MIN_PHOTOS ? `<div class="note">${n ? 'Снято ' + n + ' из минимум ' + MIN_PHOTOS : 'Фото ещё нет'}.</div>` : ''}
+        ${n ? `<div class="gal">${photos.map((p, k) => `
+          <figure class="${k === 0 ? 'first' : ''}" data-k="${k}" tabindex="0" role="button" aria-label="Открыть фото ${esc(p.file_name)}">
+            <img src="${esc(midUrl(p.file_url))}" alt="" loading="lazy">
+            <figcaption><span class="fn" title="${esc(p.file_name)}">${esc(p.file_name)}</span>
+              <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
+              ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}</figcaption>
+          </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
+      </div>
+      <div class="card">
+        <p class="st">Данные</p>
+        <div class="kv">
+          <span>Задание</span><span>${esc(d.task.title)}${it.row_no ? ', № ' + esc(it.row_no) : ''}</span>
+          <span>Код 1С</span><span class="mono">${esc(it.code_1c)}</span>
+          <span>Артикул</span><span class="mono">${esc(it.article)}</span>
+          <span>Бренд</span><span>${esc(it.brand || '—')}</span>
+          <span>Ячейка</span><span>${esc(it.cell || '—')}</span>
+          <span>Статус</span><span>${statusPill(it)}</span>
+          <span>Закрыт</span><span>${fmtDate(it.done_at)}</span>
+        </div>
+        <label class="mu" for="comment" style="display:block;margin:14px 0 4px;font-size:12.5px">Комментарий</label>
+        <textarea class="in" id="comment" placeholder="Например: мелкая деталь, хватает 3 фото">${esc(it.comment || '')}</textarea>
+        <div class="acts">
+          <button class="btn pri" type="button" data-st="done">Отметить снятым</button>
+          <button class="btn" type="button" data-st="absent">Нет на приёмке</button>
+          <button class="btn" type="button" data-st="todo">Вернуть в работу</button>
+        </div>
+      </div>
+    </div>`;
+  view.querySelectorAll('[data-st]').forEach(b => b.onclick = async () => {
+    const status = b.dataset.st;
+    if (status === 'done' && n < MIN_PHOTOS && !$('#comment').value.trim()) {
+      toast('Фото меньше ' + MIN_PHOTOS + ' — укажите причину в комментарии'); $('#comment').focus(); return;
+    }
+    view.querySelectorAll('[data-st]').forEach(x => x.disabled = true);
+    try {
+      await api('/photo/item-status', { method: 'POST', body: { item_id: num(it.id), status, comment: $('#comment').value.trim() } });
+      await loadTask(taskId);
+      toast(status === 'done' ? 'Товар отмечен снятым' : status === 'absent' ? 'Отмечено: нет на приёмке' : 'Товар возвращён в работу');
+      viewItem(taskId, itemId);
+    } catch (e) { toast(e.message); view.querySelectorAll('[data-st]').forEach(x => x.disabled = false); }
+  });
+  view.querySelectorAll('figure[data-k]').forEach(f => {
+    f.onclick = () => openLB(photos, +f.dataset.k);
+    f.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLB(photos, +f.dataset.k); } };
+  });
+}
+
+// ─── просмотр фото ────────────────────────────────────────
+const lb = { list: [], k: 0, back: null };
+function openLB(list, k) { lb.list = list; lb.k = k; lb.back = document.activeElement; $('#lb').classList.add('on'); drawLB(); $('#lb .x').focus(); }
+function closeLB() { $('#lb').classList.remove('on'); $('#lb-img').src = ''; if (lb.back) lb.back.focus(); }
+function drawLB() {
+  const p = lb.list[lb.k];
+  $('#lb-img').src = bigUrl(p.file_url);
+  $('#lb-img').alt = p.file_name;
+  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a>`;
+}
+$('#lb').addEventListener('click', e => {
+  const a = e.target.dataset.lb;
+  if (a === 'close' || e.target.id === 'lb') closeLB();
+  if (a === 'prev') { lb.k = (lb.k - 1 + lb.list.length) % lb.list.length; drawLB(); }
+  if (a === 'next') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
+});
+document.addEventListener('keydown', e => {
+  if (!$('#lb').classList.contains('on')) return;
+  if (e.key === 'Escape') closeLB();
+  if (e.key === 'ArrowLeft') { lb.k = (lb.k - 1 + lb.list.length) % lb.list.length; drawLB(); }
+  if (e.key === 'ArrowRight') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
+});
+
+route();
+</script>
+</body>
+</html>
