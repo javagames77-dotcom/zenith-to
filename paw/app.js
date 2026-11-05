@@ -12,6 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
+const APP_VERSION = 'v5';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -32,6 +33,14 @@ function toast(msg, ms = 2600) {
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms);
 }
 function plural(n, a, b, c) { n = Math.abs(n) % 100; const d = n % 10; if (n > 10 && n < 20) return c; if (d > 1 && d < 5) return b; if (d === 1) return a; return c; }
+function fileToBase64(file) {          // из GhostAudit app.js
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} };
 
 // ─── API ──────────────────────────────────────────────────
@@ -130,21 +139,15 @@ async function sync() {
     const list = S.queue.filter(q => q.status !== 'rejected').sort((a, b) => a.created - b.created);
     for (const q of list) {
       q.status = 'sending'; await DB.put('queue', q); drawQueueChip(); redrawItemIfOpen(q);
-      let bytes = null;
-      try { bytes = q.blob ? await q.blob.arrayBuffer() : null; } catch (_) { bytes = null; }
-      if (!bytes || !bytes.byteLength) {
-        q.status = 'rejected'; q.error = 'файл фото потерян — переснимите'; await DB.put('queue', q);
+      if (!q.file_base64) {
+        q.status = 'rejected'; q.error = 'старая версия очереди — переснимите'; await DB.put('queue', q);
         await refreshQueue(); redrawItemIfOpen(q); continue;
       }
-      const f = new FormData();
-      f.append('photo_uid', q.photo_uid);
-      f.append('item_id', String(q.item_id));
-      f.append('seq', String(q.seq));
-      f.append('shot_at', q.shot_at);
-      f.append('file', new Blob([bytes], { type: q.type || 'image/jpeg' }), q.name || ('photo-' + q.seq + '.jpg'));
-      const qs = '?photo_uid=' + encodeURIComponent(q.photo_uid) + '&item_id=' + q.item_id + '&seq=' + q.seq + '&shot_at=' + encodeURIComponent(q.shot_at);
       try {
-        const r = await api('/photo/upload' + qs, { method: 'POST', form: f });
+        const r = await api('/photo/upload', { method: 'POST', body: {
+          photo_uid: q.photo_uid, item_id: q.item_id, seq: q.seq, shot_at: q.shot_at,
+          mime_type: q.type, file_base64: q.file_base64
+        }});
         S.online = true;
         await DB.del('queue', q.photo_uid);
         const it = findItem(q.task_id, q.item_id);
@@ -181,7 +184,7 @@ setInterval(() => { if (S.queue.some(q => q.status !== 'rejected')) sync(); }, 3
 function header({ back, title } = {}) {
   $('#top').innerHTML = `
     ${back ? `<button class="back" type="button" aria-label="Назад" id="back">←</button>` : `<span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>`}
-    <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span>
+    <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span><span class="mu" style="font-size:11px;flex:none">${APP_VERSION}</span>
     <button class="qchip" type="button" id="qchip"></button>`;
   if (back) $('#back').onclick = () => { location.hash = back; };
   $('#qchip').onclick = () => { location.hash = '#queue'; };
@@ -303,8 +306,7 @@ async function viewItem(taskId, itemId) {
   await refreshQueue();
   drawItem(taskId, itemId);
 }
-const objUrls = new Map();
-function blobUrl(q) { if (!objUrls.has(q.photo_uid)) objUrls.set(q.photo_uid, URL.createObjectURL(q.blob)); return objUrls.get(q.photo_uid); }
+function localSrc(q) { return q.file_base64 ? 'data:' + (q.type || 'image/jpeg') + ';base64,' + q.file_base64 : ''; }
 function drawItem(taskId, itemId) {
   const it = findItem(taskId, itemId);
   if (!it) return failView(new Error('Товар не найден в задании'));
@@ -316,7 +318,7 @@ function drawItem(taskId, itemId) {
   const pct = Math.min(100, Math.round(n / MIN_PHOTOS * 100));
   const tiles = [
     ...server.map(p => ({ src: thumb(p.file_url), badge: '', cls: '' })),
-    ...local.map(q => ({ src: blobUrl(q), badge: q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка…' : 'в очереди', cls: q.status === 'rejected' ? 'er' : '' }))
+    ...local.map(q => ({ src: localSrc(q), badge: q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка…' : 'в очереди', cls: q.status === 'rejected' ? 'er' : '' }))
   ];
   app.innerHTML = `
     <div class="stack">
@@ -367,15 +369,14 @@ function takePhoto(taskId, it, n) {
         : 'Нужен JPEG или PNG, получено: ' + (file.type || 'неизвестный формат'), 5000);
       return;
     }
-    // iPhone отдаёт снимок как ссылку на временный файл, который потом исчезает.
-    // Поэтому сразу читаем байты и храним в очереди сами данные (без пересжатия).
-    let data;
-    try { data = await file.arrayBuffer(); } catch (_) { data = null; }
-    if (!data || !data.byteLength) { toast('Не удалось прочитать фото, снимите ещё раз', 4000); return; }
+    // Как в GhostAudit: снимок сразу переводим в base64 и храним в очереди строкой.
+    let b64;
+    try { b64 = await fileToBase64(file); } catch (_) { b64 = ''; }
+    if (!b64) { toast('Не удалось прочитать фото, снимите ещё раз', 4000); return; }
     const q = {
       photo_uid: uuid(), task_id: num(taskId), item_id: num(it.id),
       seq: n + 1, shot_at: new Date().toISOString(), created: Date.now(),
-      blob: new Blob([data], { type: file.type }), name: file.name || 'photo.jpg', type: file.type, size: data.byteLength, status: 'wait'
+      file_base64: b64, type: file.type || 'image/jpeg', size: file.size, status: 'wait'
     };
     await DB.put('queue', q);
     await refreshQueue();
