@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v5';
+const APP_VERSION = 'v6';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -432,11 +432,29 @@ async function viewQueue() {
 }
 
 // ─── Сканер ───────────────────────────────────────────────
-// Камера телефона: на Android — встроенный BarcodeDetector, иначе библиотека ZXing.
-let scanStream = null, zxReader = null, scanTimer = null, scanDone = false;
+// Распознавание — zxing-wasm (тот же движок ZXing-C++, которым проверяли коробку LPR):
+// файлы лежат у нас в vendor/, без внешних CDN.
+const SCAN_FORMATS = ['EAN13', 'EAN8', 'UPCA', 'UPCE', 'Code128', 'Code39', 'QRCode', 'DataMatrix'];
+let zxReady = null;
+function zxInit() {
+  if (zxReady) return zxReady;
+  if (!window.ZXingWASM) return Promise.reject(new Error('Модуль сканера не загрузился'));
+  // .wasm загружаем сами: не зависит от настроек MIME на хостинге и работает из кэша без сети
+  zxReady = fetch('./vendor/zxing_reader.wasm')
+    .then(r => { if (!r.ok) throw new Error('Модуль сканера не найден (' + r.status + ')'); return r.arrayBuffer(); })
+    .then(buf => { ZXingWASM.prepareZXingModule({ overrides: { wasmBinary: buf }, fireImmediately: true }); })
+    .catch(e => { zxReady = null; throw e; });
+  return zxReady;
+}
+async function readCodes(imageData) {
+  await zxInit();
+  const res = await ZXingWASM.readBarcodes(imageData, { formats: SCAN_FORMATS, tryHarder: true, maxNumberOfSymbols: 6 });
+  return res.filter(r => r.isValid && r.text).map(r => r.text);
+}
+let scanStream = null, scanTimer = null, scanDone = false;
 function stopScanner() {
+  scanDone = true;
   if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
-  if (zxReader) { try { zxReader.reset(); } catch (_) {} zxReader = null; }
   if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
   const s = $('#scan-ui'); if (s) s.remove();
 }
@@ -454,6 +472,10 @@ function matchItem(items, text) {
   return items.find(i => c.includes(i.article_norm) || c.includes(norm(i.code_1c)))
       || items.find(i => i.article_norm && c.some(x => x.length >= 6 && (x.includes(i.article_norm) || i.article_norm.includes(x))));
 }
+function matchAny(items, texts) {
+  for (const t of texts) { const it = matchItem(items, t); if (it) return it; }
+  return null;
+}
 async function viewScan(taskId) {
   header({ back: '#task-' + taskId, title: 'Сканер' });
   let d;
@@ -465,70 +487,104 @@ async function viewScan(taskId) {
   ui.innerHTML = `
     <video id="v" playsinline muted autoplay></video>
     <div class="frame" aria-hidden="true"></div>
-    <div class="hint">Наведите на штрих-код или QR на коробке</div>
-    <div class="tools"><button type="button" id="s-close">✕ Закрыть</button><button type="button" id="s-torch" hidden>Фонарик</button></div>
+    <div class="hint" id="s-hint">Наведите на штрих-код или QR. Держите 15–25 см</div>
+    <div class="tools"><button type="button" id="s-close">✕ Закрыть</button><span><button type="button" id="s-zoom" hidden>×2</button> <button type="button" id="s-torch" hidden>Фонарик</button></span></div>
     <div class="sheet" id="s-sheet">
-      <input class="in" id="s-manual" placeholder="Или введите артикул" autocomplete="off" aria-label="Артикул вручную">
-      <button class="btn" type="button" id="s-find">Найти</button>
+      <div class="mu" id="s-status" style="font-size:13px" aria-live="polite">Запуск камеры…</div>
+      <button class="btn pri" type="button" id="s-photo">Сфотографировать код</button>
+      <div class="row2"><input class="in" id="s-manual" placeholder="Или артикул" autocomplete="off" aria-label="Артикул вручную"><button class="btn" type="button" id="s-find">Найти</button></div>
     </div>`;
   document.body.appendChild(ui);
   $('#s-close').onclick = () => { location.hash = '#task-' + taskId; };
-  const found = text => onScan(d, taskId, text);
-  $('#s-find').onclick = () => { const v = $('#s-manual').value.trim(); if (v) found(v); };
+  $('#s-find').onclick = () => { const v = $('#s-manual').value.trim(); if (v) onScan(d, taskId, [v], true); };
   $('#s-manual').onkeydown = e => { if (e.key === 'Enter') $('#s-find').click(); };
+  $('#s-photo').onclick = () => scanFromPhoto(d, taskId);
+  const status = t => { const el = $('#s-status'); if (el) el.textContent = t; };
+  try { await zxInit(); } catch (e) { status(e.message + '. Используйте «Сфотографировать код» или ввод артикула.'); }
   const video = $('#v');
   try {
-    if ('BarcodeDetector' in window) {
-      const formats = await BarcodeDetector.getSupportedFormats();
-      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128', 'code_39', 'qr_code', 'data_matrix'].filter(f => formats.includes(f)) });
-      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      video.srcObject = scanStream; await video.play();
-      const track = scanStream.getVideoTracks()[0];
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      if (caps.torch) { const tb = $('#s-torch'); tb.hidden = false; let on = false; tb.onclick = () => { on = !on; track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); }; }
-      let last = '', same = 0;
-      const loop = async () => {
-        if (scanDone || !scanStream) return;
-        try {
-          const codes = await det.detect(video);
-          if (codes.length) {
-            const v = codes[0].rawValue;
-            same = v === last ? same + 1 : 0; last = v;
-            if (same >= 1) return found(v);   // два одинаковых чтения подряд
-          }
-        } catch (_) {}
-        scanTimer = setTimeout(loop, 120);
-      };
-      loop();
-    } else if (window.ZXing) {
-      const hints = new Map();
-      const F = ZXing.BarcodeFormat;
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.CODE_128, F.CODE_39, F.QR_CODE, F.DATA_MATRIX]);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      zxReader = new ZXing.BrowserMultiFormatReader(hints, 150);
-      await zxReader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } }, video, res => {
-        if (res && !scanDone) found(res.getText());
-      });
-    } else {
-      throw new Error('Сканер не поддерживается этим браузером');
-    }
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
   } catch (e) {
-    const msg = e && e.name === 'NotAllowedError' ? 'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.' : (e.message || 'Камера недоступна');
-    $('.hint').textContent = msg;
+    status(e && e.name === 'NotAllowedError' ? 'Нет доступа к камере. Разрешите камеру для сайта или используйте «Сфотографировать код».' : 'Камера недоступна: ' + (e.message || e.name));
+    return;
   }
+  if (scanDone) { scanStream.getTracks().forEach(t => t.stop()); return; }
+  video.srcObject = scanStream;
+  try { await video.play(); } catch (_) {}
+  const track = scanStream.getVideoTracks()[0];
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  try { if (caps.focusMode && caps.focusMode.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (_) {}
+  if (caps.torch) { const tb = $('#s-torch'); tb.hidden = false; let on = false; tb.onclick = () => { on = !on; track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); }; }
+  if (caps.zoom && caps.zoom.max >= 2) { const zb = $('#s-zoom'); zb.hidden = false; let z = false; zb.onclick = () => { z = !z; zb.textContent = z ? '×1' : '×2'; track.applyConstraints({ advanced: [{ zoom: z ? 2 : (caps.zoom.min || 1) }] }).catch(() => {}); }; }
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let frames = 0, lastRead = '', misses = 0;
+  const loop = async () => {
+    if (scanDone || !scanStream) return;
+    const w = video.videoWidth, h = video.videoHeight;
+    if (w && h) {
+      const k = Math.min(1, 1920 / Math.max(w, h));
+      canvas.width = Math.round(w * k); canvas.height = Math.round(h * k);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      try {
+        const texts = await readCodes(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        frames++;
+        if (texts.length) {
+          if (onScan(d, taskId, texts, false)) return;
+          // код прочитан, но товара нет — показываем после двух одинаковых чтений
+          if (texts[0] === lastRead) misses++; else { lastRead = texts[0]; misses = 1; }
+          if (misses >= 2) { onScan(d, taskId, texts, true); return; }
+          status('Прочитано: ' + texts[0] + ' — ищу в задании…');
+        } else if (frames % 5 === 0) {
+          status('Ищу код… Держите ровно, код целиком в рамке');
+        }
+      } catch (e) { status('Ошибка распознавания: ' + (e.message || e)); }
+    }
+    scanTimer = setTimeout(loop, 80);
+  };
+  status('Ищу код…');
+  loop();
 }
-function onScan(d, taskId, text) {
-  if (scanDone) return;
-  scanDone = true; vibrate(60);
-  const it = matchItem(d.items || [], text);
-  if (it) { stopScanner(); location.hash = `#item-${num(taskId)}-${num(it.id)}`; return; }
+// Запасной путь: снимок родной камерой (резкий, с автофокусом) и распознавание по нему
+function scanFromPhoto(d, taskId) {
+  const cam = $('#cam');
+  cam.value = '';
+  cam.onchange = async () => {
+    const file = cam.files && cam.files[0];
+    if (!file) return;
+    const st = $('#s-status'); if (st) st.textContent = 'Распознаю фото…';
+    try {
+      const bmp = await createImageBitmap(file);
+      const k = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      const cx = c.getContext('2d'); cx.drawImage(bmp, 0, 0, c.width, c.height);
+      const texts = await readCodes(cx.getImageData(0, 0, c.width, c.height));
+      if (!texts.length) { if (st) st.textContent = 'На фото код не найден. Снимите ближе и ровнее.'; return; }
+      onScan(d, taskId, texts, true);
+    } catch (e) { if (st) st.textContent = 'Не удалось обработать фото: ' + (e.message || e); }
+  };
+  cam.click();
+}
+// Возвращает true, если товар найден и открыт
+function onScan(d, taskId, texts, showMiss) {
+  const it = matchAny(d.items || [], texts);
+  if (it) {
+    vibrate(60); stopScanner();
+    location.hash = `#item-${num(taskId)}-${num(it.id)}`;
+    return true;
+  }
+  if (!showMiss) return false;
+  vibrate([30, 60, 30]);
+  if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
   const sheet = $('#s-sheet');
+  if (!sheet) return false;
   sheet.innerHTML = `
-    <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${esc(text)}</div></div>
+    <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${texts.map(esc).join('<br>')}</div></div>
     <button class="btn pri" type="button" id="s-again">Сканировать ещё</button>
     <button class="btn" type="button" id="s-list">Найти в списке вручную</button>`;
   $('#s-again').onclick = () => { stopScanner(); viewScan(taskId); };
   $('#s-list').onclick = () => { taskFilter = 'all'; taskSearch = ''; location.hash = '#task-' + taskId; };
+  return false;
 }
 
 // ─── запуск ───────────────────────────────────────────────

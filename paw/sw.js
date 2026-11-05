@@ -2,8 +2,8 @@
 // Оболочка приложения: сначала сеть, без сети — копия из кэша.
 // Чтение из n8n (GET): всегда в сеть; без сети — ответ с маркером X-ZF-Offline.
 // Отправка (POST) идёт мимо service worker.
-const CACHE = 'zf-pwa-v5';
-const SHELL = ['./', './index.html', './app.js?v=5', './manifest.json', './vendor/zxing.min.js',
+const CACHE = 'zf-pwa-v6';
+const SHELL = ['./', './index.html', './app.js?v=6', './manifest.json', './vendor/zxing-reader.js', './vendor/zxing_reader.wasm',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
