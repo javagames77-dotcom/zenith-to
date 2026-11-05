@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v7';
+const APP_VERSION = 'v8';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -251,8 +251,10 @@ async function viewTasks() {
       }).join('')}</div>` : '<div class="card empty">Открытых заданий нет. Задание создаёт администратор из Excel.</div>'}
       <button class="btn" type="button" id="add-new">+ Новый товар без Excel</button>
       <button class="btn" type="button" id="refresh">Обновить</button>
+      <div id="push-box"></div>
     </div>`;
   $('#refresh').onclick = viewTasks;
+  Push.draw();
   $('#add-new').onclick = () => { location.hash = '#add'; };
 }
 
@@ -441,7 +443,8 @@ function viewAdd(prefill) {
   $('#a-save').onclick = async () => {
     const body = {
       article: $('#a-article').value.trim(), brand: $('#a-brand').value.trim(),
-      code_1c: $('#a-code').value.trim(), name: $('#a-name').value.trim(), cell: $('#a-cell').value.trim()
+      code_1c: $('#a-code').value.trim(), name: $('#a-name').value.trim(), cell: $('#a-cell').value.trim(),
+      source: 'pwa'
     };
     if (!body.article) { toast('Введите артикул'); $('#a-article').focus(); return; }
     if (!body.brand) { toast('Введите бренд — он нужен для имени файла'); $('#a-brand').focus(); return; }
@@ -644,6 +647,107 @@ function onScan(d, taskId, texts, showMiss) {
   return false;
 }
 
+// ─── Push-уведомления ─────────────────────────────────────
+// Телефон подписывается один раз (кнопка на экране заданий), подписка уходит в n8n.
+// Публичный VAPID-ключ берём с сервера, чтобы он всегда совпадал с ключом отправки.
+// iPhone: push работает только в приложении, установленном на экран «Домой» из Safari (iOS 16.4+).
+const b64uToBytes = s => {
+  s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '=';
+  const r = atob(s), a = new Uint8Array(r.length); for (let i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a;
+};
+const bytesToB64u = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function deviceName() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'iPad';
+  const m = ua.match(/Android[^;)]*;\s*([^;)]+?)(?:\s+Build|\))/);
+  if (m) return 'Android · ' + m[1].trim();
+  return /Android/.test(ua) ? 'Android' : (navigator.platform || 'браузер');
+}
+const Push = {
+  reg: null, key: null,
+  supported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && location.protocol === 'https:'; },
+  isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); },
+  standalone() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; },
+  state() {
+    if (!this.supported()) return this.isIOS() && !this.standalone() ? 'ios-install' : 'unsupported';
+    if (Notification.permission === 'denied') return 'denied';
+    let on = false; try { on = localStorage.getItem('zf-push') === 'on'; } catch (_) {}
+    return Notification.permission === 'granted' && on ? 'on' : 'off';
+  },
+  // Готовим заранее, чтобы по нажатию кнопки сразу спросить разрешение (iPhone требует это в момент нажатия)
+  prepare() {
+    if (!this.supported()) return Promise.resolve();
+    if (this.reg && this.key) return Promise.resolve();
+    if (!this._prep) this._prep = (async () => {
+      try {
+        if (!this.reg) this.reg = await navigator.serviceWorker.ready;
+        if (!this.key) this.key = (await api('/photo/push/key')).key;
+      } catch (_) {}
+      this._prep = null;
+    })();
+    return this._prep;
+  },
+  async subscribe() {
+    if (!this.reg || !this.key) await this.prepare();
+    if (!this.reg || !this.key) throw new Error('Нет связи с сервером');
+    let sub = await this.reg.pushManager.getSubscription();
+    // подписка со старым ключом не получит уведомления — пересоздаём
+    if (sub && sub.options && sub.options.applicationServerKey && bytesToB64u(sub.options.applicationServerKey) !== this.key) {
+      await sub.unsubscribe(); sub = null;
+    }
+    if (!sub) sub = await this.reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(this.key) });
+    const j = sub.toJSON();
+    await api('/photo/push/subscribe', { method: 'POST', body: { endpoint: j.endpoint, keys: j.keys, device: deviceName() } });
+    try { localStorage.setItem('zf-push', 'on'); } catch (_) {}
+  },
+  async enable(btn) {
+    // запрос разрешения — первым действием, без ожиданий до него
+    const perm = Notification.permission === 'default' ? Notification.requestPermission() : Promise.resolve(Notification.permission);
+    btn.disabled = true; btn.textContent = 'Включаю…';
+    try {
+      if (await perm !== 'granted') { this.draw(); return; }
+      await this.subscribe();
+      toast('Уведомления включены');
+    } catch (e) {
+      toast('Не удалось включить уведомления: ' + (e.message || e), 4000);
+    }
+    this.draw();
+  },
+  // при каждом запуске тихо обновляем подписку на сервере (адрес подписки иногда меняется)
+  async refresh() {
+    if (this.state() === 'unsupported' || !this.supported() || Notification.permission !== 'granted') return;
+    try { await this.subscribe(); this.draw(); } catch (e) { console.warn('push', e); }
+  },
+  draw() {
+    const box = $('#push-box'); if (!box) return;
+    const st = this.state();
+    if (st === 'off') {
+      box.innerHTML = '<button class="btn" type="button" id="push-on">🔔 Включить уведомления о новых заданиях</button>';
+      $('#push-on').onclick = e => this.enable(e.currentTarget);
+      this.prepare();
+    } else if (st === 'on') {
+      box.innerHTML = '<div class="mu" style="font-size:13px;text-align:center">🔔 Уведомления включены</div>';
+    } else if (st === 'denied') {
+      box.innerHTML = '<div class="info">Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.</div>';
+    } else if (st === 'ios-install') {
+      box.innerHTML = '<div class="info">Чтобы получать уведомления на iPhone, откройте сайт в Safari → «Поделиться» → «На экран „Домой“» и запускайте приложение с иконки.</div>';
+    } else box.innerHTML = '';
+  }
+};
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    const d = e.data || {};
+    const m = String(d.url || '').match(/^#(?:task|item)-(\d+)/);
+    if (m) delete S.task[m[1]];                      // задание изменилось — при открытии взять свежее
+    if (d.type === 'open' && d.url) {
+      if (location.hash === d.url) route(); else location.hash = d.url;
+    } else if (d.type === 'push' && current && /^#?(tasks)?$/.test(current.h)) {
+      viewTasks();                                   // на списке заданий — сразу показать новое
+    }
+  });
+}
+
 // ─── запуск ───────────────────────────────────────────────
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -653,4 +757,5 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   try { await Promise.race([refreshQueue(), new Promise(r => setTimeout(r, 2500))]); } catch (e) { console.warn('queue', e); }
   route();
   sync().catch(() => {});
+  Push.refresh();
 })();
