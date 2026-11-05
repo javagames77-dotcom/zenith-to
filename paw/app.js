@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v6';
+const APP_VERSION = 'v7';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -206,7 +206,8 @@ const routes = [
   [/^#task-(\d+)$/, m => viewTask(m[1])],
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#scan-(\d+)$/, m => viewScan(m[1])],
-  [/^#queue$/, () => viewQueue()]
+  [/^#queue$/, () => viewQueue()],
+  [/^#add(?:-(.*))?$/, m => viewAdd(m[1] ? decodeURIComponent(m[1]) : '')]
 ];
 function route() {
   stopScanner();
@@ -248,13 +249,18 @@ async function viewTasks() {
           <span class="n">${[t.file_name, t.photographer].filter(Boolean).map(esc).join(' · ')}</span>
           <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
       }).join('')}</div>` : '<div class="card empty">Открытых заданий нет. Задание создаёт администратор из Excel.</div>'}
+      <button class="btn" type="button" id="add-new">+ Новый товар без Excel</button>
       <button class="btn" type="button" id="refresh">Обновить</button>
     </div>`;
   $('#refresh').onclick = viewTasks;
+  $('#add-new').onclick = () => { location.hash = '#add'; };
 }
 
 // ─── Задание ──────────────────────────────────────────────
 let taskFilter = 'todo', taskSearch = '';
+let taskSort = 'row';
+try { taskSort = localStorage.getItem('zf-sort') || 'row'; } catch (_) {}
+const cellKey = c => String(c || '').toUpperCase().replace(/\d+/g, d => d.padStart(6, '0'));
 async function viewTask(id) {
   header({ back: '#tasks', title: 'Задание' });
   if (!S.task[id]) loading();
@@ -279,6 +285,10 @@ async function viewTask(id) {
         <button type="button" data-f="done">Сняты ${done}</button>
         <button type="button" data-f="absent">Нет на приёмке ${items.filter(i => i.status === 'absent').length}</button>
       </div>
+      <div class="chips" role="group" aria-label="Порядок">
+        <button type="button" data-s="row">По номеру</button>
+        <button type="button" data-s="cell">По ячейке</button>
+      </div>
       <div class="list" id="items"></div>
     </div>`;
   const body = $('#items');
@@ -286,14 +296,19 @@ async function viewTask(id) {
     app.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
     const q = taskSearch.trim(), qn = norm(q), qu = q.toUpperCase();
     let list = taskFilter === 'all' ? items : items.filter(i => i.status === taskFilter);
-    if (q) list = items.filter(i => (i.article_norm || '').includes(qn) || norm(i.code_1c).includes(qn) || (i.name || '').toUpperCase().includes(qu));
+    if (q) list = items.filter(i => (i.article_norm || '').includes(qn) || norm(i.code_1c).includes(qn) || (i.name || '').toUpperCase().includes(qu) || norm(i.cell).includes(qn));
+    list = [...list];
+    if (taskSort === 'cell') list.sort((a, b) => (a.cell ? 0 : 1) - (b.cell ? 0 : 1) || cellKey(a.cell).localeCompare(cellKey(b.cell)) || num(a.row_no) - num(b.row_no));
+    else list.sort((a, b) => num(a.row_no) - num(b.row_no));
+    app.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === taskSort));
     body.innerHTML = list.map(i => {
       const n = num(i.photos_stored) + localCount(i);
       const pill = i.status === 'done' ? '<span class="pill ok">снят</span>' : i.status === 'absent' ? '<span class="pill er">нет</span>' : n ? `<span class="pill bl">${n} фото</span>` : '<span class="pill">не снят</span>';
-      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
+      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
     }).join('') || `<div class="empty">${q ? 'Ничего не найдено' : 'Здесь пусто'}</div>`;
   }
   app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; taskSearch = ''; $('#search').value = ''; draw(); });
+  app.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { taskSort = b.dataset.s; try { localStorage.setItem('zf-sort', taskSort); } catch (_) {} draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
   $('#scan').onclick = () => { location.hash = '#scan-' + num(d.task.id); };
   draw();
@@ -327,6 +342,7 @@ function drawItem(taskId, itemId) {
         <div class="sub">${esc(it.name || '')}</div>
         <div class="sub mono" style="font-size:12.5px">код 1С ${esc(it.code_1c)}${it.row_no ? ' · № ' + esc(it.row_no) : ''}</div>
       </div>
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center"><span class="mu">Ячейка на складе</span><b class="mono" style="font-size:20px">${it.cell ? esc(it.cell) : '—'}</b></div>
       ${it.status === 'done' ? '<div class="info">Товар отмечен снятым. Можно доснять фото.</div>' : it.status === 'absent' ? '<div class="note">Отмечено: нет на приёмке.</div>' : ''}
       <div class="card">
         <div class="count"><span class="mu">Снято</span><b>${n} <span class="mu" style="font-size:14px;font-weight:400">· минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS}</span></b></div>
@@ -404,6 +420,42 @@ async function setStatus(taskId, it, status, n) {
     btns.forEach(b => b.disabled = false);
     toast(e.offline ? 'Нет сети. Фото сохранены, отметьте «Готово», когда появится связь' : e.message, 4000);
   }
+}
+
+// ─── Новый товар без Excel ────────────────────────────────
+// Товар попадает в задание «Поток с приёмки» за сегодня (создаётся автоматически)
+function viewAdd(prefill) {
+  header({ back: '#tasks', title: 'Новый товар' });
+  app.innerHTML = `
+    <div class="stack">
+      <div class="info">Товар без Excel попадёт в задание «Поток с приёмки» за сегодня. Нужна сеть.</div>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Артикул *</span><input class="in mono" id="a-article" value="${esc(prefill)}" autocomplete="off" autocapitalize="characters"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Бренд *</span><input class="in" id="a-brand" autocomplete="off" placeholder="Mobis, VAG, GMB…"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Код 1С (если знаете)</span><input class="in mono" id="a-code" autocomplete="off"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Название</span><input class="in" id="a-name" autocomplete="off"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Ячейка на складе</span><input class="in mono" id="a-cell" autocomplete="off" autocapitalize="characters"></label>
+      <div class="mu" style="font-size:12.5px">Если кода 1С нет, товару дадут временный код NEW-артикул; админ сверит его с 1С позже.</div>
+    </div>
+    <div class="dock"><div class="in-dock"><button class="btn pri big" type="button" id="a-save">Добавить и снимать</button></div></div>`;
+  $(prefill ? '#a-brand' : '#a-article').focus();
+  $('#a-save').onclick = async () => {
+    const body = {
+      article: $('#a-article').value.trim(), brand: $('#a-brand').value.trim(),
+      code_1c: $('#a-code').value.trim(), name: $('#a-name').value.trim(), cell: $('#a-cell').value.trim()
+    };
+    if (!body.article) { toast('Введите артикул'); $('#a-article').focus(); return; }
+    if (!body.brand) { toast('Введите бренд — он нужен для имени файла'); $('#a-brand').focus(); return; }
+    const btn = $('#a-save'); btn.disabled = true; btn.textContent = 'Добавляю…';
+    try {
+      const r = await api('/photo/item-add', { method: 'POST', body });
+      await loadTask(r.task_id);
+      toast(r.created ? 'Товар добавлен в поток с приёмки' : 'Товар уже есть в потоке — открываю');
+      location.hash = `#item-${num(r.task_id)}-${num(r.item_id)}`;
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Добавить и снимать';
+      toast(e.offline ? 'Нет сети. Добавить товар можно только онлайн' : e.message, 4000);
+    }
+  };
 }
 
 // ─── Очередь ──────────────────────────────────────────────
@@ -581,9 +633,14 @@ function onScan(d, taskId, texts, showMiss) {
   sheet.innerHTML = `
     <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${texts.map(esc).join('<br>')}</div></div>
     <button class="btn pri" type="button" id="s-again">Сканировать ещё</button>
-    <button class="btn" type="button" id="s-list">Найти в списке вручную</button>`;
+    <button class="btn" type="button" id="s-list">Найти в списке вручную</button>
+    <button class="btn" type="button" id="s-add">Добавить как новый товар</button>`;
   $('#s-again').onclick = () => { stopScanner(); viewScan(taskId); };
   $('#s-list').onclick = () => { taskFilter = 'all'; taskSearch = ''; location.hash = '#task-' + taskId; };
+  $('#s-add').onclick = () => {
+    const c = codeCandidates(texts[0]);
+    location.hash = '#add-' + encodeURIComponent(c[c.length - 1] || texts[0]);
+  };
   return false;
 }
 
