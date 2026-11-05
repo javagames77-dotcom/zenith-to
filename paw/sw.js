@@ -1,8 +1,9 @@
 // Зеніт-Авто.фото — service worker
 // Оболочка приложения: сначала сеть, без сети — копия из кэша.
-// Запросы к n8n: всегда в сеть; без сети — ответ с маркером X-ZF-Offline.
-const CACHE = 'zf-pwa-v1';
-const SHELL = ['./', './index.html', './app.js?v=1', './manifest.json', './vendor/zxing.min.js',
+// Чтение из n8n (GET): всегда в сеть; без сети — ответ с маркером X-ZF-Offline.
+// Отправка (POST) идёт мимо service worker.
+const CACHE = 'zf-pwa-v3';
+const SHELL = ['./', './index.html', './app.js?v=3', './manifest.json', './vendor/zxing.min.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -13,6 +14,9 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // Отправку данных (POST с фото) не трогаем совсем: Safari теряет тело
+  // multipart-запроса, если service worker передаёт его дальше.
+  if (e.request.method !== 'GET') return;
   if (url.hostname.endsWith('railway.app')) {
     e.respondWith(fetch(e.request).catch(() => new Response(
       JSON.stringify({ success: false, error: 'Нет связи с сервером' }),
