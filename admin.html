@@ -210,6 +210,11 @@ function cld(url, t) { return url ? url.replace('/image/upload/', '/image/upload
 const thumbUrl = u => cld(u, 'c_fill,w_120,h_120,q_auto,f_auto');
 const midUrl = u => cld(u, 'c_fill,w_420,h_420,q_auto,f_auto');
 const bigUrl = u => cld(u, 'c_limit,w_1800,h_1800,q_auto,f_auto');
+// «Каталожная» версия на белом фоне: тот же файл с суффиксом _web
+const webUrl = u => u ? u.replace(/\/v\d+\//, '/').replace(/(\.[a-z0-9]+)$/i, '_web$1') : '';
+let bgMode = 'orig';   // orig | web
+try { bgMode = localStorage.getItem('zf-bg') || 'orig'; } catch (_) {}
+const pick = u => bgMode === 'web' ? webUrl(u) : u;
 const lowRes = p => p.width && p.height && Math.max(p.width, p.height) < LOW_RES_PX;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -525,14 +530,16 @@ async function viewItem(taskId, itemId) {
     <div class="split">
       <div class="card">
         <div class="bar" style="justify-content:space-between;margin-bottom:10px"><b>Фото · ${n}</b>
-          <span class="mu">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки</span></div>
+          <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button></span></div>
+        <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон делается автоматически через несколько секунд после загрузки</div>
         ${n < MIN_PHOTOS ? `<div class="note">${n ? 'Снято ' + n + ' из минимум ' + MIN_PHOTOS : 'Фото ещё нет'}.</div>` : ''}
         ${n ? `<div class="gal">${photos.map((p, k) => `
           <figure class="${k === 0 ? 'first' : ''}" data-k="${k}" tabindex="0" role="button" aria-label="Открыть фото ${esc(p.file_name)}">
-            <img src="${esc(midUrl(p.file_url))}" alt="" loading="lazy">
+            <img src="${esc(midUrl(pick(p.file_url)))}" alt="" loading="lazy" data-orig="${esc(midUrl(p.file_url))}" onerror="if(this.dataset.orig&&this.src!==this.dataset.orig){this.src=this.dataset.orig;this.closest('figure').querySelector('.noweb').hidden=false}">
             <figcaption><span class="fn" title="${esc(p.file_name)}">${esc(p.file_name)}</span>
               <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
-              ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}</figcaption>
+              ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}
+              <span class="noweb" hidden><span class="pill">белого фона нет</span></span></figcaption>
           </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
       </div>
       <div class="card">
@@ -568,6 +575,10 @@ async function viewItem(taskId, itemId) {
       viewItem(taskId, itemId);
     } catch (e) { toast(e.message); view.querySelectorAll('[data-st]').forEach(x => x.disabled = false); }
   });
+  view.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => {
+    bgMode = b.dataset.bg; try { localStorage.setItem('zf-bg', bgMode); } catch (_) {}
+    viewItem(taskId, itemId);
+  });
   view.querySelectorAll('figure[data-k]').forEach(f => {
     f.onclick = () => openLB(photos, +f.dataset.k);
     f.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLB(photos, +f.dataset.k); } };
@@ -580,9 +591,12 @@ function openLB(list, k) { lb.list = list; lb.k = k; lb.back = document.activeEl
 function closeLB() { $('#lb').classList.remove('on'); $('#lb-img').src = ''; if (lb.back) lb.back.focus(); }
 function drawLB() {
   const p = lb.list[lb.k];
-  $('#lb-img').src = bigUrl(p.file_url);
+  const img = $('#lb-img');
+  img.onerror = () => { if (img.dataset.fallback !== '1') { img.dataset.fallback = '1'; img.src = bigUrl(p.file_url); } };
+  img.dataset.fallback = '';
+  img.src = bigUrl(pick(p.file_url));
   $('#lb-img').alt = p.file_name;
-  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a>`;
+  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a><a href="${esc(webUrl(p.file_url))}" target="_blank" rel="noopener">Белый фон ↗</a>`;
 }
 $('#lb').addEventListener('click', e => {
   const a = e.target.dataset.lb;
