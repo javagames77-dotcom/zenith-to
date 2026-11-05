@@ -424,16 +424,16 @@ function renderPreview(file, parsed) {
       <button type="button" data-f="all">Все ${items.length}</button>
       <button type="button" data-f="issues">С замечаниями ${wa + er}</button>
     </div>
-    <div class="tw"><table><thead><tr><th>Строка</th><th>№</th><th>Код 1С</th><th>Артикул</th><th>Бренд</th><th>Номенклатура</th><th>Проверка</th></tr></thead><tbody id="pv-body"></tbody></table></div>`;
+    <div class="tw"><table><thead><tr><th>Строка</th><th>№</th><th>Код 1С</th><th>Артикул</th><th>Бренд</th><th>Ячейка</th><th>Номенклатура</th><th>Проверка</th></tr></thead><tbody id="pv-body"></tbody></table></div>`;
   const body = $('#pv-body');
   function draw() {
     pv.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === filter));
     const list = filter === 'issues' ? items.filter(i => i._level !== 'ok') : items;
     body.innerHTML = list.slice(0, 1000).map(i => `<tr>
       <td class="mu">${i._line}</td><td>${esc(i.row_no)}</td><td class="mono nw">${esc(i.code_1c)}</td><td class="mono nw"><b>${esc(i.article)}</b></td>
-      <td>${esc(i.brand)}</td><td>${esc(i.name)}</td>
+      <td>${esc(i.brand)}</td><td class="mono nw">${esc(i.cell) || '<span class="mu">—</span>'}</td><td>${esc(i.name)}</td>
       <td>${i._issues.length ? i._issues.map(x => `<span class="pill ${x[0]}">${esc(x[1])}</span>`).join(' ') : '<span class="pill ok">ок</span>'}</td></tr>`).join('')
-      || '<tr><td colspan="7" class="empty">Замечаний нет</td></tr>';
+      || '<tr><td colspan="8" class="empty">Замечаний нет</td></tr>';
   }
   pv.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
   draw();
@@ -485,7 +485,7 @@ async function viewTask(id) {
       <button type="button" data-f="absent">Нет на приёмке ${absent}</button>
       <button type="button" data-f="flags">С флагами ${flagged}</button>
     </div>
-    <div class="tw"><table><thead><tr><th>№</th><th>Артикул · код 1С</th><th>Номенклатура</th><th>Фото</th><th>Статус и флаги</th></tr></thead><tbody id="items"></tbody></table></div>`;
+    <div class="tw"><table><thead><tr><th>№</th><th>Артикул · код 1С</th><th>Ячейка</th><th>Номенклатура</th><th>Фото</th><th>Статус и флаги</th></tr></thead><tbody id="items"></tbody></table></div>`;
   const body = $('#items');
   function draw() {
     view.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
@@ -501,10 +501,11 @@ async function viewTask(id) {
       return `<tr class="click" data-href="#item-${num(t.id)}-${num(i.id)}" tabindex="0">
         <td class="mu">${esc(i.row_no ?? '')}</td>
         <td class="nw"><b class="mono">${esc(i.article)}</b> <span class="mu">${esc(i.brand || '')}</span><div class="mu mono">${esc(i.code_1c)}</div></td>
+        <td class="mono nw">${esc(i.cell) || '<span class="mu">—</span>'}</td>
         <td>${esc(i.name || '')}</td>
         <td class="nw">${ph.length ? `<span class="thumbs">${th}${ph.length > 5 ? '<em>+' + (ph.length - 5) + '</em>' : ''}</span>` : '<span class="mu">—</span>'}</td>
         <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</td></tr>`;
-    }).join('') || '<tr><td colspan="5" class="empty">Ничего не найдено</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="empty">Ничего не найдено</td></tr>';
     bindRowLinks();
   }
   view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
