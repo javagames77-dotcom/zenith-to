@@ -1,0 +1,512 @@
+// ═══════════════════════════════════════════════════════════
+// Зеніт-Авто.фото — PWA фотографа (пилот)
+// Фото снимается родной камерой телефона и уходит на сервер как есть,
+// без сжатия. Пока нет сети — ждёт в очереди на телефоне (IndexedDB).
+// ═══════════════════════════════════════════════════════════
+const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
+const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
+
+// ─── утилиты ──────────────────────────────────────────────
+const $ = (s, r = document) => r.querySelector(s);
+const esc = v => v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const num = v => Number(v) || 0;
+const norm = s => String(s || '').toUpperCase().replace(/[\s./\\_-]/g, '');
+const thumb = u => u ? u.replace('/image/upload/', '/image/upload/c_fill,w_300,h_300,q_auto,f_auto/') : '';
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms);
+}
+function plural(n, a, b, c) { n = Math.abs(n) % 100; const d = n % 10; if (n > 10 && n < 20) return c; if (d > 1 && d < 5) return b; if (d === 1) return a; return c; }
+const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} };
+
+// ─── API ──────────────────────────────────────────────────
+// offline = true, если до сервера не достучались (нет сети). Тогда работаем по кэшу.
+async function api(path, { method = 'GET', body, form } = {}) {
+  let res;
+  try {
+    res = await fetch(API_BASE + path, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: form || (body ? JSON.stringify(body) : undefined)
+    });
+  } catch (_) {
+    const e = new Error('Нет связи с сервером'); e.offline = true; throw e;
+  }
+  if (res.headers.get('X-ZF-Offline') === '1') { const e = new Error('Нет связи с сервером'); e.offline = true; throw e; }
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (!res.ok || !data || data.success === false) {
+    const e = new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+    e.status = res.status; throw e;
+  }
+  return data;
+}
+
+// ─── IndexedDB: очередь фото и кэш заданий ────────────────
+const DB = {
+  db: null,
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((ok, fail) => {
+      const r = indexedDB.open('zenit-foto', 1);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        d.createObjectStore('queue', { keyPath: 'photo_uid' });
+        d.createObjectStore('cache');
+      };
+      r.onsuccess = () => { this.db = r.result; ok(this.db); };
+      r.onerror = () => fail(r.error);
+    });
+  },
+  async tx(store, mode, fn) {
+    const d = await this.open();
+    return new Promise((ok, fail) => {
+      const t = d.transaction(store, mode); const s = t.objectStore(store);
+      const r = fn(s);
+      t.oncomplete = () => ok(r && 'result' in r ? r.result : undefined);
+      t.onerror = () => fail(t.error);
+    });
+  },
+  put: (store, val, key) => DB.tx(store, 'readwrite', s => s.put(val, key)),
+  get: (store, key) => DB.tx(store, 'readonly', s => s.get(key)),
+  del: (store, key) => DB.tx(store, 'readwrite', s => s.delete(key)),
+  all: store => DB.tx(store, 'readonly', s => s.getAll())
+};
+// Просим браузер не чистить хранилище (важно для iOS)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ─── состояние ────────────────────────────────────────────
+const S = { tasks: null, task: {}, queue: [], online: navigator.onLine, syncing: false };
+async function refreshQueue() { S.queue = await DB.all('queue'); drawQueueChip(); }
+const queueFor = itemId => S.queue.filter(q => num(q.item_id) === num(itemId)).sort((a, b) => a.created - b.created);
+
+async function loadTasks() {
+  try { const d = await api('/photo/tasks'); S.tasks = d.tasks || []; await DB.put('cache', S.tasks, 'tasks'); S.online = true; }
+  catch (e) { if (!e.offline) throw e; S.online = false; S.tasks = (await DB.get('cache', 'tasks')) || []; }
+  drawQueueChip();
+  return S.tasks;
+}
+async function loadTask(id, { cachedFirst = false } = {}) {
+  if (cachedFirst && S.task[id]) return S.task[id];
+  try { const d = await api('/photo/task?task_id=' + id); S.task[id] = d; await DB.put('cache', d, 'task-' + id); S.online = true; }
+  catch (e) {
+    if (!e.offline) throw e;
+    S.online = false;
+    const c = await DB.get('cache', 'task-' + id);
+    if (!c) throw new Error('Нет сети, и задание ещё не загружалось на этот телефон');
+    S.task[id] = c;
+  }
+  drawQueueChip();
+  return S.task[id];
+}
+function findItem(taskId, itemId) { const d = S.task[taskId]; return d && (d.items || []).find(i => num(i.id) === num(itemId)); }
+
+// ─── отправка очереди ─────────────────────────────────────
+async function sync() {
+  if (S.syncing) return;
+  S.syncing = true;
+  try {
+    await refreshQueue();
+    const list = S.queue.filter(q => q.status !== 'rejected').sort((a, b) => a.created - b.created);
+    for (const q of list) {
+      q.status = 'sending'; await DB.put('queue', q); drawQueueChip(); redrawItemIfOpen(q);
+      const f = new FormData();
+      f.append('photo_uid', q.photo_uid);
+      f.append('item_id', String(q.item_id));
+      f.append('seq', String(q.seq));
+      f.append('shot_at', q.shot_at);
+      f.append('file', q.blob, q.name || ('photo-' + q.seq + '.jpg'));
+      try {
+        const r = await api('/photo/upload', { method: 'POST', form: f });
+        S.online = true;
+        await DB.del('queue', q.photo_uid);
+        const it = findItem(q.task_id, q.item_id);
+        if (it) {
+          it.photos = it.photos || [];
+          if (!it.photos.some(p => p.photo_uid === r.photo_uid)) {
+            it.photos.push({ photo_uid: r.photo_uid, photo_index: r.photo_index, file_name: r.file_name, file_url: r.file_url, width: r.width, height: r.height, size_bytes: r.size_bytes, status: 'stored', seq: q.seq });
+            it.photos_stored = num(it.photos_stored) + 1;
+          }
+          await DB.put('cache', S.task[q.task_id], 'task-' + q.task_id);
+        }
+      } catch (e) {
+        if (e.offline) { S.online = false; q.status = 'wait'; await DB.put('queue', q); break; }
+        // 4xx — сервер отклонил (например, неверный формат) — повторять бессмысленно
+        q.status = e.status && e.status < 500 ? 'rejected' : 'wait';
+        q.error = e.message; q.tries = (q.tries || 0) + 1;
+        await DB.put('queue', q);
+        if (q.status === 'wait') break;
+      }
+      await refreshQueue(); redrawItemIfOpen(q);
+    }
+  } finally {
+    S.syncing = false;
+    await refreshQueue();
+    redrawCurrent();
+  }
+}
+window.addEventListener('online', () => { S.online = true; sync(); });
+window.addEventListener('offline', () => { S.online = false; drawQueueChip(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(); });
+setInterval(() => { if (S.queue.some(q => q.status !== 'rejected')) sync(); }, 30000);
+
+// ─── шапка ────────────────────────────────────────────────
+function header({ back, title } = {}) {
+  $('#top').innerHTML = `
+    ${back ? `<button class="back" type="button" aria-label="Назад" id="back">←</button>` : `<span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>`}
+    <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span>
+    <button class="qchip" type="button" id="qchip"></button>`;
+  if (back) $('#back').onclick = () => { location.hash = back; };
+  $('#qchip').onclick = () => { location.hash = '#queue'; };
+  drawQueueChip();
+}
+function drawQueueChip() {
+  const c = $('#qchip'); if (!c) return;
+  const wait = S.queue.filter(q => q.status !== 'rejected').length;
+  const bad = S.queue.filter(q => q.status === 'rejected').length;
+  c.className = 'qchip' + (bad ? ' er' : !S.online ? ' off' : wait ? ' wa' : '');
+  c.textContent = bad ? `ошибки: ${bad}` : !S.online ? (wait ? `нет сети · ${wait}` : 'нет сети') : wait ? `отправка · ${wait}` : 'всё отправлено';
+}
+
+// ─── маршруты ─────────────────────────────────────────────
+const app = $('#app');
+let current = null;
+const routes = [
+  [/^#?(tasks)?$/, () => viewTasks()],
+  [/^#task-(\d+)$/, m => viewTask(m[1])],
+  [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
+  [/^#scan-(\d+)$/, m => viewScan(m[1])],
+  [/^#queue$/, () => viewQueue()]
+];
+function route() {
+  stopScanner();
+  const h = location.hash || '#tasks';
+  for (const [re, fn] of routes) {
+    const m = h.match(re);
+    if (m) { current = { h, m }; fn(m); window.scrollTo(0, 0); return; }
+  }
+  location.hash = '#tasks';
+}
+window.addEventListener('hashchange', route);
+function redrawCurrent() {
+  if (!current) return;
+  if (/^#item-/.test(current.h)) drawItem(current.m[1], current.m[2]);
+  else if (/^#queue$/.test(current.h)) viewQueue();
+}
+function redrawItemIfOpen(q) {
+  if (current && /^#item-/.test(current.h) && num(current.m[2]) === num(q.item_id)) drawItem(current.m[1], current.m[2]);
+}
+const loading = t => { app.innerHTML = `<div class="empty">${esc(t || 'Загрузка…')}</div>`; };
+function failView(e, retry) {
+  app.innerHTML = `<div class="stack"><div class="err">${esc(e.message || e)}</div>${retry ? '<button class="btn" type="button" id="retry">Повторить</button>' : ''}</div>`;
+  if (retry) $('#retry').onclick = retry;
+}
+
+// ─── Задания ──────────────────────────────────────────────
+async function viewTasks() {
+  header(); loading();
+  let tasks;
+  try { tasks = await loadTasks(); } catch (e) { return failView(e, viewTasks); }
+  const open = tasks.filter(t => t.status === 'open');
+  app.innerHTML = `
+    <div class="stack">
+      <div><h1>Задания</h1><div class="sub">${S.online ? 'Выберите задание для съёмки' : 'Нет сети — показаны сохранённые задания'}</div></div>
+      ${open.length ? `<div class="list">${open.map(t => {
+        const total = num(t.items_total), done = num(t.items_done);
+        return `<a class="row" href="#task-${num(t.id)}">
+          <span><b>${esc(t.title)}</b></span><span class="pill ${done === total && total ? 'ok' : 'bl'}">${done} / ${total}</span>
+          <span class="n">${[t.file_name, t.photographer].filter(Boolean).map(esc).join(' · ')}</span>
+          <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
+      }).join('')}</div>` : '<div class="card empty">Открытых заданий нет. Задание создаёт администратор из Excel.</div>'}
+      <button class="btn" type="button" id="refresh">Обновить</button>
+    </div>`;
+  $('#refresh').onclick = viewTasks;
+}
+
+// ─── Задание ──────────────────────────────────────────────
+let taskFilter = 'todo', taskSearch = '';
+async function viewTask(id) {
+  header({ back: '#tasks', title: 'Задание' });
+  if (!S.task[id]) loading();
+  let d;
+  try { d = await loadTask(id); } catch (e) { return failView(e, () => viewTask(id)); }
+  await refreshQueue();
+  const items = d.items || [];
+  const localCount = it => queueFor(it.id).length;
+  const done = items.filter(i => i.status === 'done').length;
+  header({ back: '#tasks', title: d.task.title });
+  app.innerHTML = `
+    <div class="stack">
+      <div class="card">
+        <div class="count"><span class="mu">Снято товаров</span><b>${done} / ${items.length}</b></div>
+        <div class="prog" style="margin-top:8px"><i style="width:${items.length ? Math.round(done / items.length * 100) : 0}%"></i></div>
+      </div>
+      <button class="btn pri big" type="button" id="scan">Сканировать коробку</button>
+      <input class="in" id="search" type="search" placeholder="Артикул, код 1С или название" value="${esc(taskSearch)}" aria-label="Поиск товара" autocomplete="off">
+      <div class="chips" role="tablist">
+        <button type="button" data-f="todo">Не сняты ${items.filter(i => i.status === 'todo').length}</button>
+        <button type="button" data-f="all">Все ${items.length}</button>
+        <button type="button" data-f="done">Сняты ${done}</button>
+        <button type="button" data-f="absent">Нет на приёмке ${items.filter(i => i.status === 'absent').length}</button>
+      </div>
+      <div class="list" id="items"></div>
+    </div>`;
+  const body = $('#items');
+  function draw() {
+    app.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
+    const q = taskSearch.trim(), qn = norm(q), qu = q.toUpperCase();
+    let list = taskFilter === 'all' ? items : items.filter(i => i.status === taskFilter);
+    if (q) list = items.filter(i => (i.article_norm || '').includes(qn) || norm(i.code_1c).includes(qn) || (i.name || '').toUpperCase().includes(qu));
+    body.innerHTML = list.map(i => {
+      const n = num(i.photos_stored) + localCount(i);
+      const pill = i.status === 'done' ? '<span class="pill ok">снят</span>' : i.status === 'absent' ? '<span class="pill er">нет</span>' : n ? `<span class="pill bl">${n} фото</span>` : '<span class="pill">не снят</span>';
+      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
+    }).join('') || `<div class="empty">${q ? 'Ничего не найдено' : 'Здесь пусто'}</div>`;
+  }
+  app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; taskSearch = ''; $('#search').value = ''; draw(); });
+  $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
+  $('#scan').onclick = () => { location.hash = '#scan-' + num(d.task.id); };
+  draw();
+}
+
+// ─── Товар: съёмка ────────────────────────────────────────
+async function viewItem(taskId, itemId) {
+  header({ back: '#task-' + taskId, title: 'Товар' });
+  if (!S.task[taskId]) { loading(); try { await loadTask(taskId); } catch (e) { return failView(e, () => viewItem(taskId, itemId)); } }
+  await refreshQueue();
+  drawItem(taskId, itemId);
+}
+const objUrls = new Map();
+function blobUrl(q) { if (!objUrls.has(q.photo_uid)) objUrls.set(q.photo_uid, URL.createObjectURL(q.blob)); return objUrls.get(q.photo_uid); }
+function drawItem(taskId, itemId) {
+  const it = findItem(taskId, itemId);
+  if (!it) return failView(new Error('Товар не найден в задании'));
+  const keepComment = $('#comment') ? $('#comment').value : null;
+  header({ back: '#task-' + taskId, title: it.article });
+  const server = (it.photos || []).filter(p => p.file_url).sort((a, b) => num(a.photo_index) - num(b.photo_index));
+  const local = queueFor(it.id);
+  const n = server.length + local.length;
+  const pct = Math.min(100, Math.round(n / MIN_PHOTOS * 100));
+  const tiles = [
+    ...server.map(p => ({ src: thumb(p.file_url), badge: '', cls: '' })),
+    ...local.map(q => ({ src: blobUrl(q), badge: q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка…' : 'в очереди', cls: q.status === 'rejected' ? 'er' : '' }))
+  ];
+  app.innerHTML = `
+    <div class="stack">
+      <div>
+        <h1 class="mono">${esc(it.article)} <span class="mu" style="font-family:'Golos Text',system-ui,sans-serif;font-size:15px;font-weight:400">${esc(it.brand || '')}</span></h1>
+        <div class="sub">${esc(it.name || '')}</div>
+        <div class="sub mono" style="font-size:12.5px">код 1С ${esc(it.code_1c)}${it.row_no ? ' · № ' + esc(it.row_no) : ''}</div>
+      </div>
+      ${it.status === 'done' ? '<div class="info">Товар отмечен снятым. Можно доснять фото.</div>' : it.status === 'absent' ? '<div class="note">Отмечено: нет на приёмке.</div>' : ''}
+      <div class="card">
+        <div class="count"><span class="mu">Снято</span><b>${n} <span class="mu" style="font-size:14px;font-weight:400">· минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS}</span></b></div>
+        <div class="prog" style="margin-top:8px"><i style="width:${pct}%"></i></div>
+      </div>
+      ${n === 0 ? '<div class="info">Первое фото — этикетка коробки, чтобы было видно артикул.</div>' : ''}
+      <div class="grid">
+        ${tiles.map((t, k) => `<div class="ph ${k === 0 ? 'first' : ''}"><img src="${esc(t.src)}" alt="Фото ${k + 1}" loading="lazy"><span class="n">${k + 1}</span>${t.badge ? `<span class="b ${t.cls}">${t.badge}</span>` : ''}</div>`).join('')}
+        ${n < MAX_PHOTOS ? `<button class="add" type="button" id="add-tile" aria-label="Снять фото"><span>+</span>Снять</button>` : ''}
+      </div>
+      ${local.some(q => q.status === 'rejected') ? `<div class="err">Часть фото сервер не принял: ${esc(local.find(q => q.status === 'rejected').error || '')}. Переснимите их.</div>` : ''}
+      <div>
+        <label class="mu" for="comment" style="display:block;font-size:13px;margin-bottom:4px">Комментарий ${n < MIN_PHOTOS ? '(обязателен, если фото меньше ' + MIN_PHOTOS + ')' : ''}</label>
+        <textarea class="in" id="comment" placeholder="Например: мелкая деталь">${esc(keepComment !== null ? keepComment : it.comment || '')}</textarea>
+      </div>
+      <button class="btn" type="button" id="absent">Нет на приёмке</button>
+    </div>
+    <div class="dock"><div class="in-dock">
+      <div class="row2">
+        <button class="btn pri big" type="button" id="shoot" ${n >= MAX_PHOTOS ? 'disabled' : ''}>Снять фото</button>
+        <button class="btn big" type="button" id="done">${n >= MIN_PHOTOS ? 'Готово' : 'Готово · ' + n + '/' + MIN_PHOTOS}</button>
+      </div>
+    </div></div>`;
+  const shoot = () => takePhoto(taskId, it, n);
+  $('#shoot').onclick = shoot;
+  if ($('#add-tile')) $('#add-tile').onclick = shoot;
+  $('#done').onclick = () => setStatus(taskId, it, 'done', n);
+  $('#absent').onclick = () => setStatus(taskId, it, 'absent', n);
+}
+function takePhoto(taskId, it, n) {
+  if (n >= MAX_PHOTOS) { toast('Уже ' + MAX_PHOTOS + ' фото — это максимум'); return; }
+  const cam = $('#cam');
+  cam.value = '';
+  cam.onchange = async () => {
+    const file = cam.files && cam.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast(file.type === 'image/heic' || file.type === 'image/heif'
+        ? 'Фото в HEIC. На iPhone: Настройки → Камера → Форматы → «Наиболее совместимый»'
+        : 'Нужен JPEG или PNG, получено: ' + (file.type || 'неизвестный формат'), 5000);
+      return;
+    }
+    const q = {
+      photo_uid: uuid(), task_id: num(taskId), item_id: num(it.id),
+      seq: n + 1, shot_at: new Date().toISOString(), created: Date.now(),
+      blob: file, name: file.name, type: file.type, size: file.size, status: 'wait'
+    };
+    await DB.put('queue', q);
+    await refreshQueue();
+    vibrate(30);
+    drawItem(taskId, it.id);
+    sync();
+  };
+  cam.click();
+}
+async function setStatus(taskId, it, status, n) {
+  const comment = ($('#comment').value || '').trim();
+  if (status === 'done' && n < MIN_PHOTOS && !comment) {
+    toast('Фото меньше ' + MIN_PHOTOS + '. Доснимите или напишите причину в комментарии', 4000);
+    $('#comment').focus(); return;
+  }
+  const btns = [$('#done'), $('#absent')]; btns.forEach(b => b.disabled = true);
+  try {
+    await api('/photo/item-status', { method: 'POST', body: { item_id: num(it.id), status, comment } });
+    it.status = status; it.comment = comment;
+    await DB.put('cache', S.task[taskId], 'task-' + taskId);
+    vibrate([20, 40, 20]);
+    toast(status === 'done' ? 'Готово: ' + it.article : 'Отмечено: нет на приёмке');
+    location.hash = '#task-' + taskId;
+  } catch (e) {
+    btns.forEach(b => b.disabled = false);
+    toast(e.offline ? 'Нет сети. Фото сохранены, отметьте «Готово», когда появится связь' : e.message, 4000);
+  }
+}
+
+// ─── Очередь ──────────────────────────────────────────────
+async function viewQueue() {
+  header({ back: history.length > 1 ? '#tasks' : '#tasks', title: 'Очередь отправки' });
+  await refreshQueue();
+  const list = [...S.queue].sort((a, b) => a.created - b.created);
+  app.innerHTML = `
+    <div class="stack">
+      <div class="${S.online ? 'info' : 'note'}">${S.online ? 'Сеть есть.' : 'Нет сети.'} ${list.length ? 'Фото хранятся на телефоне и отправятся автоматически.' : 'Все фото отправлены.'}</div>
+      ${list.length ? `<div class="list">${list.map(q => {
+        const it = findItem(q.task_id, q.item_id);
+        return `<div class="row" style="cursor:default"><span class="a">${esc(it ? it.article : 'товар ' + q.item_id)}</span>
+          <span class="pill ${q.status === 'rejected' ? 'er' : 'wa'}">${q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка' : 'ждёт'}</span>
+          <span class="n">фото ${q.seq} · ${(q.size / 1048576).toFixed(1)} МБ${q.error ? ' · ' + esc(q.error) : ''}</span></div>`;
+      }).join('')}</div>
+      <button class="btn pri" type="button" id="send">Отправить сейчас</button>
+      ${list.some(q => q.status === 'rejected') ? '<button class="btn" type="button" id="drop">Удалить фото с ошибками</button>' : ''}` : ''}
+    </div>`;
+  if ($('#send')) $('#send').onclick = () => { S.queue.forEach(q => { if (q.status === 'rejected') q.status = 'wait'; }); Promise.all(S.queue.map(q => DB.put('queue', q))).then(sync); };
+  if ($('#drop')) $('#drop').onclick = async () => {
+    if (!confirm('Удалить фото, которые сервер не принял?')) return;
+    for (const q of S.queue.filter(q => q.status === 'rejected')) await DB.del('queue', q.photo_uid);
+    viewQueue();
+  };
+}
+
+// ─── Сканер ───────────────────────────────────────────────
+// Камера телефона: на Android — встроенный BarcodeDetector, иначе библиотека ZXing.
+let scanStream = null, zxReader = null, scanTimer = null, scanDone = false;
+function stopScanner() {
+  if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+  if (zxReader) { try { zxReader.reset(); } catch (_) {} zxReader = null; }
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  const s = $('#scan-ui'); if (s) s.remove();
+}
+function codeCandidates(text) {
+  const out = new Set([text]);
+  try { // QR LPR: http://www.qrvehiclelabel.biz/show.php?qr=<артикул в base64>
+    const u = new URL(text);
+    const qr = u.searchParams.get('qr');
+    if (qr) out.add(atob(qr));
+  } catch (_) {}
+  return [...out].map(norm).filter(Boolean);
+}
+function matchItem(items, text) {
+  const c = codeCandidates(text);
+  return items.find(i => c.includes(i.article_norm) || c.includes(norm(i.code_1c)))
+      || items.find(i => i.article_norm && c.some(x => x.length >= 6 && (x.includes(i.article_norm) || i.article_norm.includes(x))));
+}
+async function viewScan(taskId) {
+  header({ back: '#task-' + taskId, title: 'Сканер' });
+  let d;
+  try { d = await loadTask(taskId, { cachedFirst: true }); } catch (e) { return failView(e); }
+  app.innerHTML = '';
+  scanDone = false;
+  const ui = document.createElement('div');
+  ui.className = 'scan'; ui.id = 'scan-ui';
+  ui.innerHTML = `
+    <video id="v" playsinline muted autoplay></video>
+    <div class="frame" aria-hidden="true"></div>
+    <div class="hint">Наведите на штрих-код или QR на коробке</div>
+    <div class="tools"><button type="button" id="s-close">✕ Закрыть</button><button type="button" id="s-torch" hidden>Фонарик</button></div>
+    <div class="sheet" id="s-sheet">
+      <input class="in" id="s-manual" placeholder="Или введите артикул" autocomplete="off" aria-label="Артикул вручную">
+      <button class="btn" type="button" id="s-find">Найти</button>
+    </div>`;
+  document.body.appendChild(ui);
+  $('#s-close').onclick = () => { location.hash = '#task-' + taskId; };
+  const found = text => onScan(d, taskId, text);
+  $('#s-find').onclick = () => { const v = $('#s-manual').value.trim(); if (v) found(v); };
+  $('#s-manual').onkeydown = e => { if (e.key === 'Enter') $('#s-find').click(); };
+  const video = $('#v');
+  try {
+    if ('BarcodeDetector' in window) {
+      const formats = await BarcodeDetector.getSupportedFormats();
+      const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128', 'code_39', 'qr_code', 'data_matrix'].filter(f => formats.includes(f)) });
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      video.srcObject = scanStream; await video.play();
+      const track = scanStream.getVideoTracks()[0];
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (caps.torch) { const tb = $('#s-torch'); tb.hidden = false; let on = false; tb.onclick = () => { on = !on; track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); }; }
+      let last = '', same = 0;
+      const loop = async () => {
+        if (scanDone || !scanStream) return;
+        try {
+          const codes = await det.detect(video);
+          if (codes.length) {
+            const v = codes[0].rawValue;
+            same = v === last ? same + 1 : 0; last = v;
+            if (same >= 1) return found(v);   // два одинаковых чтения подряд
+          }
+        } catch (_) {}
+        scanTimer = setTimeout(loop, 120);
+      };
+      loop();
+    } else if (window.ZXing) {
+      const hints = new Map();
+      const F = ZXing.BarcodeFormat;
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.CODE_128, F.CODE_39, F.QR_CODE, F.DATA_MATRIX]);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      zxReader = new ZXing.BrowserMultiFormatReader(hints, 150);
+      await zxReader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } }, video, res => {
+        if (res && !scanDone) found(res.getText());
+      });
+    } else {
+      throw new Error('Сканер не поддерживается этим браузером');
+    }
+  } catch (e) {
+    const msg = e && e.name === 'NotAllowedError' ? 'Нет доступа к камере. Разрешите камеру для этого сайта в настройках браузера.' : (e.message || 'Камера недоступна');
+    $('.hint').textContent = msg;
+  }
+}
+function onScan(d, taskId, text) {
+  if (scanDone) return;
+  scanDone = true; vibrate(60);
+  const it = matchItem(d.items || [], text);
+  if (it) { stopScanner(); location.hash = `#item-${num(taskId)}-${num(it.id)}`; return; }
+  const sheet = $('#s-sheet');
+  sheet.innerHTML = `
+    <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${esc(text)}</div></div>
+    <button class="btn pri" type="button" id="s-again">Сканировать ещё</button>
+    <button class="btn" type="button" id="s-list">Найти в списке вручную</button>`;
+  $('#s-again').onclick = () => { stopScanner(); viewScan(taskId); };
+  $('#s-list').onclick = () => { taskFilter = 'all'; taskSearch = ''; location.hash = '#task-' + taskId; };
+}
+
+// ─── запуск ───────────────────────────────────────────────
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+refreshQueue().then(() => { route(); sync(); });
