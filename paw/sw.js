@@ -2,8 +2,9 @@
 // Оболочка приложения: сначала сеть, без сети — копия из кэша.
 // Чтение из n8n (GET): всегда в сеть; без сети — ответ с маркером X-ZF-Offline.
 // Отправка (POST) идёт мимо service worker.
-const CACHE = 'zf-pwa-v7';
-const SHELL = ['./', './index.html', './app.js?v=7', './manifest.json', './vendor/zxing-reader.js', './vendor/zxing_reader.wasm',
+// Push: показ уведомления и переход к заданию/товару по нажатию.
+const CACHE = 'zf-pwa-v8';
+const SHELL = ['./', './index.html', './app.js?v=8', './manifest.json', './vendor/zxing-reader.js', './vendor/zxing_reader.wasm',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -32,4 +33,29 @@ self.addEventListener('fetch', e => {
       return res;
     }).catch(() => caches.match(e.request, { ignoreSearch: false }).then(r => r || caches.match('./index.html')))
   );
+});
+
+// ─── Push-уведомления ──────────────────────────────────────
+// Сервер (n8n, /photo/push/send) шлёт JSON {title, body, url, tag}; url — маршрут PWA, например #task-5.
+self.addEventListener('push', e => {
+  let p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (_) { p = { body: e.data ? e.data.text() : '' }; }
+  const opts = { body: p.body || '', icon: './icons/icon-192.png', data: { url: p.url || '#tasks' } };
+  if (p.tag) { opts.tag = p.tag; opts.renotify = true; }
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(p.title || 'Зеніт-Авто.фото', opts),
+    // открытое приложение обновит список заданий
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(cs => cs.forEach(c => c.postMessage({ type: 'push', url: p.url || '' })))
+  ]));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '#tasks';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    const c = cs.find(x => x.url.startsWith(self.registration.scope));
+    if (c) { c.postMessage({ type: 'open', url }); return c.focus(); }
+    return self.clients.openWindow(self.registration.scope + url);
+  }));
 });
