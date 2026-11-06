@@ -211,10 +211,12 @@ const thumbUrl = u => cld(u, 'c_fill,w_120,h_120,q_auto,f_auto');
 const midUrl = u => cld(u, 'c_fill,w_420,h_420,q_auto,f_auto');
 const bigUrl = u => cld(u, 'c_limit,w_1800,h_1800,q_auto,f_auto');
 // «Каталожная» версия на белом фоне: тот же файл с суффиксом _web
-const webUrl = u => u ? u.replace(/\/v\d+\//, '/').replace(/(\.[a-z0-9]+)$/i, '_web$1') : '';
+const verUrl = (u, suf) => u ? u.replace(/\/v\d+\//, '/').replace(/(\.[a-z0-9]+)$/i, suf + '$1') : '';
+const webUrl = u => verUrl(u, '_web');      // вырезано на белом
+const lightUrl = u => verUrl(u, '_light');  // засвеченный фон
 let bgMode = 'orig';   // orig | web
 try { bgMode = localStorage.getItem('zf-bg') || 'orig'; } catch (_) {}
-const pick = u => bgMode === 'web' ? webUrl(u) : u;
+const pick = u => bgMode === 'web' ? webUrl(u) : bgMode === 'light' ? lightUrl(u) : u;
 const lowRes = p => p.width && p.height && Math.max(p.width, p.height) < LOW_RES_PX;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -269,7 +271,7 @@ async function viewTasks() {
   const sum = (arr, k) => arr.reduce((s, t) => s + num(t[k]), 0);
   view.innerHTML = `
     <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
-      <div class="bar"><button class="btn" type="button" id="push-test" title="Отправить пробное уведомление на телефоны фотографов">🔔 Проверить push</button><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
+      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
     <div class="kpi">
       <div>Товаров в работе<b>${sum(open, 'items_total')}</b></div>
       <div class="ok">Снято товаров<b>${sum(open, 'items_done')}</b></div>
@@ -295,19 +297,7 @@ async function viewTasks() {
       }).join('')}</tbody></table></div>`
       : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}`;
   $('#refresh').onclick = viewTasks;
-  $('#push-test').onclick = pushTest;
   bindRowLinks();
-}
-// Пробное уведомление на все телефоны, где фотограф включил уведомления
-async function pushTest() {
-  const b = $('#push-test'); b.disabled = true;
-  try {
-    const r = await api('/photo/push/send', { method: 'POST', body: {
-      title: 'Проверка уведомлений', body: 'Связь с телефоном работает. ' + new Date().toLocaleTimeString('ru-RU'), url: '#tasks', tag: 'test' } });
-    if (!num(r.devices)) toast('Нет телефонов с включёнными уведомлениями');
-    else toast('Отправлено: ' + num(r.sent) + ' из ' + num(r.devices) + (r.errors && r.errors.length ? ' · ошибка: ' + r.errors[0] : ''));
-  } catch (e) { toast(e.message); }
-  b.disabled = false;
 }
 function bindRowLinks() {
   view.querySelectorAll('tr[data-href]').forEach(tr => {
@@ -543,8 +533,8 @@ async function viewItem(taskId, itemId) {
     <div class="split">
       <div class="card">
         <div class="bar" style="justify-content:space-between;margin-bottom:10px"><b>Фото · ${n}</b>
-          <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button></span></div>
-        <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон делается автоматически через несколько секунд после загрузки</div>
+          <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button><button type="button" data-bg="light" class="${bgMode === 'light' ? 'on' : ''}">Засветка</button></span></div>
+        <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон и засветка делаются автоматически через несколько секунд после загрузки</div>
         ${n < MIN_PHOTOS ? `<div class="note">${n ? 'Снято ' + n + ' из минимум ' + MIN_PHOTOS : 'Фото ещё нет'}.</div>` : ''}
         ${n ? `<div class="gal">${photos.map((p, k) => `
           <figure class="${k === 0 ? 'first' : ''}" data-k="${k}" tabindex="0" role="button" aria-label="Открыть фото ${esc(p.file_name)}">
@@ -552,7 +542,7 @@ async function viewItem(taskId, itemId) {
             <figcaption><span class="fn" title="${esc(p.file_name)}">${esc(p.file_name)}</span>
               <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
               ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}
-              <span class="noweb" hidden><span class="pill">белого фона нет</span></span></figcaption>
+              <span class="noweb" hidden><span class="pill">${bgMode === 'light' ? 'засветки нет' : 'белого фона нет'}</span></span></figcaption>
           </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
       </div>
       <div class="card">
@@ -609,7 +599,7 @@ function drawLB() {
   img.dataset.fallback = '';
   img.src = bigUrl(pick(p.file_url));
   $('#lb-img').alt = p.file_name;
-  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a><a href="${esc(webUrl(p.file_url))}" target="_blank" rel="noopener">Белый фон ↗</a>`;
+  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a><a href="${esc(webUrl(p.file_url))}" target="_blank" rel="noopener">Белый фон ↗</a><a href="${esc(lightUrl(p.file_url))}" target="_blank" rel="noopener">Засветка ↗</a>`;
 }
 $('#lb').addEventListener('click', e => {
   const a = e.target.dataset.lb;
