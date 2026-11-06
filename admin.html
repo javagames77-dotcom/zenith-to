@@ -271,7 +271,7 @@ async function viewTasks() {
   const sum = (arr, k) => arr.reduce((s, t) => s + num(t[k]), 0);
   view.innerHTML = `
     <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
-      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
+      <div class="bar"><button class="btn" type="button" id="push-test" title="Отправить пробное уведомление на телефоны фотографов">🔔 Проверить push</button><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
     <div class="kpi">
       <div>Товаров в работе<b>${sum(open, 'items_total')}</b></div>
       <div class="ok">Снято товаров<b>${sum(open, 'items_done')}</b></div>
@@ -297,7 +297,19 @@ async function viewTasks() {
       }).join('')}</tbody></table></div>`
       : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}`;
   $('#refresh').onclick = viewTasks;
+  $('#push-test').onclick = pushTest;
   bindRowLinks();
+}
+// Пробное уведомление на все телефоны, где фотограф включил уведомления
+async function pushTest() {
+  const b = $('#push-test'); b.disabled = true;
+  try {
+    const r = await api('/photo/push/send', { method: 'POST', body: {
+      title: 'Проверка уведомлений', body: 'Связь с телефоном работает. ' + new Date().toLocaleTimeString('ru-RU'), url: '#tasks', tag: 'test' } });
+    if (!num(r.devices)) toast('Нет телефонов с включёнными уведомлениями');
+    else toast('Отправлено: ' + num(r.sent) + ' из ' + num(r.devices) + (r.errors && r.errors.length ? ' · ошибка: ' + r.errors[0] : ''));
+  } catch (e) { toast(e.message); }
+  b.disabled = false;
 }
 function bindRowLinks() {
   view.querySelectorAll('tr[data-href]').forEach(tr => {
