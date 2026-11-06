@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v9';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -670,7 +670,8 @@ const Push = {
   isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); },
   standalone() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; },
   state() {
-    if (!this.supported()) return this.isIOS() && !this.standalone() ? 'ios-install' : 'unsupported';
+    if (Local.on()) return 'local';
+    if (!this.supported()) return this.isIOS() && !this.standalone() ? 'ios-install' : (Local.supported() ? 'off' : 'unsupported');
     if (Notification.permission === 'denied') return 'denied';
     let on = false; try { on = localStorage.getItem('zf-push') === 'on'; } catch (_) {}
     return Notification.permission === 'granted' && on ? 'on' : 'off';
@@ -707,15 +708,24 @@ const Push = {
     btn.disabled = true; btn.textContent = 'Включаю…';
     try {
       if (await perm !== 'granted') { this.draw(); return; }
+      if (!this.supported()) throw new Error('push не поддерживается');
       await this.subscribe();
+      Local.set(false);
       toast('Уведомления включены');
     } catch (e) {
-      toast('Не удалось включить уведомления: ' + (e.message || e), 4000);
+      // Нет службы push (например, Android без сервисов Google) — уведомления от самого приложения
+      if (Notification.permission === 'granted' && Local.supported()) {
+        Local.set(true);
+        toast('Push на этом устройстве недоступен. Включены уведомления, пока приложение открыто', 5000);
+      } else {
+        toast('Не удалось включить уведомления: ' + (e.message || e), 4000);
+      }
     }
     this.draw();
   },
   // при каждом запуске тихо обновляем подписку на сервере (адрес подписки иногда меняется)
   async refresh() {
+    if (Local.on()) { Local.start(); return; }
     if (this.state() === 'unsupported' || !this.supported() || Notification.permission !== 'granted') return;
     try { await this.subscribe(); this.draw(); } catch (e) { console.warn('push', e); }
   },
@@ -728,6 +738,8 @@ const Push = {
       this.prepare();
     } else if (st === 'on') {
       box.innerHTML = '<div class="mu" style="font-size:13px;text-align:center">🔔 Уведомления включены</div>';
+    } else if (st === 'local') {
+      box.innerHTML = '<div class="mu" style="font-size:13px;text-align:center">🔔 Уведомления включены, пока приложение открыто<br>(на этом устройстве нет службы push)</div>';
     } else if (st === 'denied') {
       box.innerHTML = '<div class="info">Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.</div>';
     } else if (st === 'ios-install') {
@@ -735,6 +747,53 @@ const Push = {
     } else box.innerHTML = '';
   }
 };
+// ─── Уведомления без push-службы ──────────────────────────
+// Для КПК без сервисов Google (push в Chrome там не работает): пока приложение открыто,
+// раз в 45 с проверяем задания и показываем системное уведомление о новом.
+const Local = {
+  timer: null, KEY: 'zf-notify-local', SEEN: 'zf-seen',
+  supported() { return 'Notification' in window && 'serviceWorker' in navigator; },
+  on() { try { return localStorage.getItem(this.KEY) === '1' && 'Notification' in window && Notification.permission === 'granted'; } catch (_) { return false; } },
+  set(v) {
+    try { v ? localStorage.setItem(this.KEY, '1') : localStorage.removeItem(this.KEY); } catch (_) {}
+    if (v) this.start(); else this.stop();
+  },
+  start() {
+    if (this.timer || !this.on()) return;
+    this.check(true);
+    this.timer = setInterval(() => this.check(false), 45000);
+  },
+  stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
+  async check(baseline) {
+    let tasks;
+    try { tasks = (await api('/photo/tasks')).tasks || []; } catch (_) { return; }
+    const now = {};
+    tasks.filter(t => t.status === 'open').forEach(t => { now[num(t.id)] = num(t.items_total); });
+    let seen = null;
+    try { seen = JSON.parse(localStorage.getItem(this.SEEN) || 'null'); } catch (_) {}
+    try { localStorage.setItem(this.SEEN, JSON.stringify(now)); } catch (_) {}
+    if (baseline && seen === null) return;          // первый запуск — только запоминаем
+    seen = seen || {};
+    for (const t of tasks) {
+      const id = num(t.id);
+      if (!(id in now)) continue;
+      const before = seen[id];
+      if (before === undefined) await this.notify('Новое задание', t.title + ' · ' + now[id] + ' ' + plural(now[id], 'товар', 'товара', 'товаров'), '#task-' + id);
+      else if (now[id] > before) { const d = now[id] - before; await this.notify('Новые товары для съёмки', t.title + ': +' + d + ' ' + plural(d, 'товар', 'товара', 'товаров'), '#task-' + id); }
+    }
+  },
+  async notify(title, body, url) {
+    vibrate([200, 100, 200]);
+    try {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(() => r(null), 3000))]);
+      if (reg) await reg.showNotification(title, { body, icon: './icons/icon-192.png', tag: 'zf-local-' + url, renotify: true, data: { url } });
+      else { const n = new Notification(title, { body, icon: './icons/icon-192.png' }); n.onclick = () => { window.focus(); location.hash = url; }; }
+    } catch (_) { toast(title + ': ' + body, 5000); }
+    if (current && /^#?(tasks)?$/.test(current.h)) viewTasks();
+  }
+};
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Local.on()) Local.check(false); });
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', e => {
     const d = e.data || {};
