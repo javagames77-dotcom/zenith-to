@@ -1,9 +1,13 @@
 """
 Зеніт-Авто.фото — сервис «каталожной» версии фото.
-Удаляет фон (rembg + ISNet), ставит деталь на белый квадрат.
-POST /cutout  JSON: {"url": "..."} или {"image_base64": "..."}
-              необязательно: size (1600), fill (0.85), quality (92)
-Ответ: image/jpeg.
+Белый фон для каталога (rembg + ISNet): вырезка на белом и «засветка» фона.
+POST /cutout   JSON: {"url": "..."} или {"image_base64": "..."}
+               необязательно: size (1600), fill (0.85), quality (92)
+               Ответ: image/jpeg — деталь вырезана и стоит на белом квадрате.
+POST /lighten  JSON: {"url": "..."} или {"image_base64": "..."}
+               необязательно: strength (0.88), quality (92)
+               Ответ: image/jpeg — исходный кадр, баланс белого по фону,
+               фон «засвечен» к белому, деталь и её мягкая тень сохранены.
 Если задана переменная CUTOUT_TOKEN, нужен заголовок X-Token.
 """
 import base64, io, os
@@ -11,7 +15,8 @@ import requests
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-from PIL import Image, ImageOps
+import numpy as np
+from PIL import Image, ImageOps, ImageFilter
 import onnxruntime as ort
 from rembg import remove, new_session
 
@@ -79,4 +84,39 @@ def cutout(r: Req, x_token: str | None = Header(default=None)):
     canvas.paste(obj, ((size - obj.width) // 2, (size - obj.height) // 2), obj)
     buf = io.BytesIO()
     canvas.save(buf, "JPEG", quality=max(60, min(r.quality, 98)), optimize=True)
+    return Response(buf.getvalue(), media_type="image/jpeg")
+
+
+class LightReq(BaseModel):
+    url: str | None = None
+    image_base64: str | None = None
+    strength: float = 0.88
+    quality: int = 92
+
+
+@app.post("/lighten")
+def lighten(r: LightReq, x_token: str | None = Header(default=None)):
+    if TOKEN and x_token != TOKEN:
+        raise HTTPException(401, "Неверный токен")
+    im = load_image(Req(url=r.url, image_base64=r.image_base64))
+    a = np.asarray(im).astype(np.float32)
+    # маска детали (1 — деталь, 0 — фон), края слегка размыты
+    m_img = remove(im, session=session, only_mask=True, post_process_mask=True)
+    m_img = m_img.filter(ImageFilter.GaussianBlur(2))
+    m = np.asarray(m_img).astype(np.float32) / 255.0
+    bg = m < 0.05
+    # баланс белого: средний цвет фона принимаем за белый (ограничиваем усиление)
+    if bg.mean() > 0.05:
+        ref = np.median(a[bg], axis=0)
+        gain = np.clip(235.0 / np.maximum(ref, 1.0), 0.8, 1.6)
+    else:
+        gain = np.ones(3, dtype=np.float32)
+    v = np.clip(a * gain, 0, 255)
+    # засветка только фона: тянем к белому, тени остаются слабыми
+    k = max(0.0, min(r.strength, 0.98))
+    bg_light = 255.0 - (255.0 - v) * (1.0 - k)
+    out = v * m[..., None] + bg_light * (1.0 - m[..., None])
+    res = Image.fromarray(np.clip(out, 0, 255).astype("uint8"))
+    buf = io.BytesIO()
+    res.save(buf, "JPEG", quality=max(60, min(r.quality, 98)), optimize=True)
     return Response(buf.getvalue(), media_type="image/jpeg")
