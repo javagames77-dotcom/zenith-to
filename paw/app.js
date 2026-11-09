@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v9';
+const APP_VERSION = 'v10';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // ─── утилиты ──────────────────────────────────────────────
@@ -43,14 +43,29 @@ function fileToBase64(file) {          // из GhostAudit app.js
 }
 const vibrate = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} };
 
+// ─── вход ─────────────────────────────────────────────────
+// Фотограф входит один раз: телефон хранит ключ входа (не пароль), сервер продлевает его при работе.
+// Ключи хранилища свои, не как у админки, чтобы входы не путались.
+const Auth = {
+  token: null, user: null,
+  load() { try { this.token = localStorage.getItem('zf_pwa_token'); this.user = JSON.parse(localStorage.getItem('zf_pwa_user') || 'null'); } catch (_) {} },
+  save(token, user) { this.token = token; this.user = user; try { localStorage.setItem('zf_pwa_token', token); localStorage.setItem('zf_pwa_user', JSON.stringify(user)); localStorage.setItem('zf_pwa_login', user.login || ''); } catch (_) {} },
+  clear() { this.token = null; this.user = null; try { localStorage.removeItem('zf_pwa_token'); localStorage.removeItem('zf_pwa_user'); } catch (_) {} },
+  lastLogin() { try { return localStorage.getItem('zf_pwa_login') || ''; } catch (_) { return ''; } }
+};
+Auth.load();
+
 // ─── API ──────────────────────────────────────────────────
 // offline = true, если до сервера не достучались (нет сети). Тогда работаем по кэшу.
-async function api(path, { method = 'GET', body, form } = {}) {
+// auth = true, если вход истёк или отозван: фото в очереди остаются, приложение просит войти.
+async function api(path, { method = 'GET', body, form, noAuth = false } = {}) {
   let res;
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (!noAuth && Auth.token) headers['Authorization'] = 'Bearer ' + Auth.token;
   try {
     res = await fetch(API_BASE + path, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      method, headers,
       body: form || (body ? JSON.stringify(body) : undefined)
     });
   } catch (_) {
@@ -59,9 +74,14 @@ async function api(path, { method = 'GET', body, form } = {}) {
   if (res.headers.get('X-ZF-Offline') === '1') { const e = new Error('Нет связи с сервером'); e.offline = true; throw e; }
   let data = null;
   try { data = await res.json(); } catch (_) {}
+  if (res.status === 401 && !noAuth) {
+    const e = new Error((data && data.error) || 'Нужно войти'); e.status = 401; e.auth = true;
+    if (Auth.token) { Auth.clear(); setTimeout(() => showLogin(e.message), 0); }
+    throw e;
+  }
   if (!res.ok || !data || data.success === false) {
     const e = new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
-    e.status = res.status; throw e;
+    e.status = res.status; e.data = data; throw e;
   }
   return data;
 }
@@ -132,7 +152,7 @@ function findItem(taskId, itemId) { const d = S.task[taskId]; return d && (d.ite
 
 // ─── отправка очереди ─────────────────────────────────────
 async function sync() {
-  if (S.syncing) return;
+  if (S.syncing || !Auth.token) return;
   S.syncing = true;
   try {
     await refreshQueue();
@@ -161,6 +181,8 @@ async function sync() {
         }
       } catch (e) {
         if (e.offline) { S.online = false; q.status = 'wait'; await DB.put('queue', q); break; }
+        // вход истёк или нет прав: фото ждёт, после входа уйдёт само
+        if (e.status === 401 || e.status === 403) { q.status = 'wait'; q.error = e.message; await DB.put('queue', q); break; }
         // 4xx — сервер отклонил (например, неверный формат) — повторять бессмысленно
         q.status = e.status && e.status < 500 ? 'rejected' : 'wait';
         q.error = e.message; q.tries = (q.tries || 0) + 1;
@@ -211,6 +233,8 @@ const routes = [
 ];
 function route() {
   stopScanner();
+  if (!Auth.token) return showLogin();
+  document.body.classList.remove('login-on');
   const h = location.hash || '#tasks';
   for (const [re, fn] of routes) {
     const m = h.match(re);
@@ -246,14 +270,16 @@ async function viewTasks() {
         const total = num(t.items_total), done = num(t.items_done);
         return `<a class="row" href="#task-${num(t.id)}">
           <span><b>${esc(t.title)}</b></span><span class="pill ${done === total && total ? 'ok' : 'bl'}">${done} / ${total}</span>
-          <span class="n">${[t.file_name, t.photographer].filter(Boolean).map(esc).join(' · ')}</span>
+          <span class="n">${[t.file_name].filter(Boolean).map(esc).join(' · ')}</span>
           <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
-      }).join('')}</div>` : '<div class="card empty">Открытых заданий нет. Задание создаёт администратор из Excel.</div>'}
+      }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; товар с приёмки можно добавить кнопкой ниже.</div>'}
       <button class="btn" type="button" id="add-new">+ Новый товар без Excel</button>
       <button class="btn" type="button" id="refresh">Обновить</button>
       <div id="push-box"></div>
+      <div class="whoami">Вы вошли как <b>${esc(Auth.user ? Auth.user.full_name : '')}</b> · <button type="button" class="link" id="logout">Выйти</button></div>
     </div>`;
   $('#refresh').onclick = viewTasks;
+  $('#logout').onclick = logout;
   Push.draw();
   $('#add-new').onclick = () => { location.hash = '#add'; };
 }
@@ -725,6 +751,7 @@ const Push = {
   },
   // при каждом запуске тихо обновляем подписку на сервере (адрес подписки иногда меняется)
   async refresh() {
+    if (!Auth.token) return;
     if (Local.on()) { Local.start(); return; }
     if (this.state() === 'unsupported' || !this.supported() || Notification.permission !== 'granted') return;
     try { await this.subscribe(); this.draw(); } catch (e) { console.warn('push', e); }
@@ -759,7 +786,7 @@ const Local = {
     if (v) this.start(); else this.stop();
   },
   start() {
-    if (this.timer || !this.on()) return;
+    if (this.timer || !this.on() || !Auth.token) return;
     this.check(true);
     this.timer = setInterval(() => this.check(false), 45000);
   },
@@ -807,6 +834,81 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// ─── Экран входа фотографа ───────────────────────────────
+// Нарочно не похож на вход в админку: тёмный, крупный, «приложение фотографа».
+const ADMIN_URL = 'https://zenith-to.onrender.com/admin.html';
+function showLogin(msg) {
+  stopScanner();
+  Local.stop();
+  document.body.classList.add('login-on');
+  document.title = 'Вход — приложение фотографа';
+  $('#top').innerHTML = '';
+  const wait = S.queue.filter(q => q.status !== 'rejected').length;
+  app.innerHTML = `<form class="login" id="pwa-login-form" name="photographer-login" novalidate>
+    <div class="login-cam" aria-hidden="true">📷</div>
+    <div class="login-kicker">Зеніт-Авто.фото</div>
+    <h1>Приложение фотографа</h1>
+    <p class="login-sub">Войдите один раз — дальше телефон помнит вход</p>
+    ${wait ? `<div class="login-note">На телефоне ${wait} ${plural(wait, 'фото ждёт', 'фото ждут', 'фото ждут')} отправки. После входа они уйдут сами.</div>` : ''}
+    ${msg ? `<div class="login-note">${esc(msg)}</div>` : ''}
+    <label>Логин<input id="pl-login" name="photographer-login-name" autocomplete="section-photographer username" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(Auth.lastLogin())}"></label>
+    <label>Пароль<input id="pl-pass" name="photographer-login-password" type="password" autocomplete="section-photographer current-password"></label>
+    <button class="login-go" type="submit" id="pl-go">Войти</button>
+    <div id="pl-err"></div>
+    <p class="login-foot">Менеджер или администратор? Вам в админку на компьютере: ${ADMIN_URL.replace('https://', '')}</p>
+    <p class="login-foot">${APP_VERSION}</p>
+  </form>`;
+  $('#pwa-login-form').onsubmit = async e => {
+    e.preventDefault();
+    const login = $('#pl-login').value.trim(), password = $('#pl-pass').value;
+    const err = m => { $('#pl-err').innerHTML = '<div class="login-err">' + esc(m) + '</div>'; };
+    if (!login || !password) return err('Введите логин и пароль');
+    const b = $('#pl-go'); b.disabled = true; b.textContent = 'Входим…';
+    try {
+      const d = await api('/photo/auth/login', { method: 'POST', noAuth: true, body: { login, password, scope: 'pwa', device: deviceName(), app_version: APP_VERSION } });
+      Auth.save(d.token, d.user);
+      S.tasks = null; S.task = {};
+      location.hash = '#tasks'; route();
+      sync().catch(() => {});
+      Push.refresh();
+    } catch (ex) {
+      err(ex.offline ? 'Нет связи с сервером. Для входа нужен интернет' : ex.message);
+      b.disabled = false; b.textContent = 'Войти';
+    }
+  };
+  (Auth.lastLogin() ? $('#pl-pass') : $('#pl-login')).focus();
+}
+async function logout() {
+  await refreshQueue();
+  const wait = S.queue.filter(q => q.status !== 'rejected').length;
+  const ask = wait
+    ? `На телефоне ${wait} неотправленных фото. Они останутся и уйдут после следующего входа. Выйти?`
+    : 'Выйти из приложения? Для входа понадобятся логин и пароль.';
+  if (!confirm(ask)) return;
+  const t = Auth.token;
+  Auth.clear();
+  try { localStorage.removeItem('zf-push'); } catch (_) {}
+  try {     // этот телефон больше не получает уведомления прежнего пользователя
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+    if (sub) await sub.unsubscribe();
+  } catch (_) {}
+  try { await fetch(API_BASE + '/photo/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }); } catch (_) {}
+  try { await DB.del('cache', 'tasks'); } catch (_) {}
+  S.tasks = null; S.task = {};
+  showLogin();
+}
+// проверка входа при запуске: заблокированного или чужого пользователя — на экран входа
+async function checkMe() {
+  if (!Auth.token) return;
+  try {
+    const d = await api('/photo/auth/me?scope=pwa');
+    if (d.user) Auth.save(Auth.token, d.user);
+  } catch (e) {
+    if (e.status === 403) { Auth.clear(); showLogin(e.message); }
+  }
+}
+
 // ─── запуск ───────────────────────────────────────────────
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -815,6 +917,9 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 (async () => {
   try { await Promise.race([refreshQueue(), new Promise(r => setTimeout(r, 2500))]); } catch (e) { console.warn('queue', e); }
   route();
-  sync().catch(() => {});
-  Push.refresh();
+  if (Auth.token) {
+    checkMe();
+    sync().catch(() => {});
+    Push.refresh();
+  }
 })();
