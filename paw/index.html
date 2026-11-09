@@ -116,6 +116,25 @@ textarea.in { padding: 10px 14px; min-height: 72px; resize: vertical; }
 .cell { display: inline-block; font-family: "PT Mono", ui-monospace, monospace; font-size: 12.5px; font-weight: 700; background: var(--or-soft); color: var(--wa); border-radius: 6px; padding: 0 6px; margin-right: 4px; }
 .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--tx); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 92vw; text-align: center; }
 .toast.on { opacity: 1; }
+
+/* вход фотографа: всегда тёмный и крупный — чтобы не спутать со входом в админку */
+body.login-on { background: #0d0f13; }
+body.login-on .top { display: none; }
+.login { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 28px 22px calc(28px + env(safe-area-inset-bottom, 0px)); max-width: 460px; margin: 0 auto; color: #f2f3f5; }
+.login-cam { font-size: 54px; line-height: 1; }
+.login-kicker { color: #F38435; font-weight: 700; letter-spacing: .02em; }
+.login h1 { font-size: 30px; line-height: 1.15; margin: 0; color: #fff; }
+.login-sub { color: #9aa3b2; margin: 0 0 10px; }
+.login label { display: flex; flex-direction: column; gap: 6px; color: #c6ccd6; font-size: 14px; }
+.login input { min-height: 54px; border-radius: 14px; border: 1px solid #2f3541; background: #171a20; color: #fff; padding: 0 16px; font-size: 18px; }
+.login input:focus { outline: 2px solid #F38435; outline-offset: 1px; border-color: #F38435; }
+.login-go { min-height: 58px; border-radius: 14px; border: 0; background: #F38435; color: #111318; font-size: 19px; font-weight: 800; margin-top: 6px; cursor: pointer; }
+.login-go:disabled { opacity: .6; }
+.login-note { background: #3a2414; color: #ffb27a; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+.login-err { background: #3a1c1c; color: #ff8a80; border-radius: 12px; padding: 10px 14px; font-size: 15px; }
+.login-foot { color: #6b7280; font-size: 12.5px; margin: 6px 0 0; text-align: center; }
+.whoami { text-align: center; color: var(--mu); font-size: 13px; padding: 6px 0 4px; }
+.link { background: none; border: 0; color: var(--bl); font: inherit; padding: 0; cursor: pointer; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -125,6 +144,6 @@ textarea.in { padding: 10px 14px; min-height: 72px; resize: vertical; }
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=8" defer></script>
+<script src="./app.js?v=10" defer></script>
 </body>
 </html>
