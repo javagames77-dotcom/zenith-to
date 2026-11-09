@@ -546,7 +546,7 @@ async function viewTask(id) {
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}</div></div>
-      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
     <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
     <div class="tabs" role="tablist">
@@ -582,6 +582,11 @@ async function viewTask(id) {
   view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
   $('#refresh').onclick = () => viewTask(id);
+  $('#xls').onclick = async () => {
+    const b = $('#xls'); b.disabled = true; b.textContent = 'Готовлю…';
+    try { exportTaskXlsx(await loadTask(id)); } catch (e) { toast(e.message); }
+    b.disabled = false; b.textContent = 'Скачать Excel';
+  };
   loadPhotographers().then(dd => {
     const sel = $('#t-ph'); if (!sel) return;
     const list = (dd.photographers || []).slice();
@@ -671,6 +676,63 @@ async function viewItem(taskId, itemId) {
     f.onclick = () => openLB(photos, +f.dataset.k);
     f.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLB(photos, +f.dataset.k); } };
   });
+}
+
+// ─── Итоговый Excel по заданию ───────────────────────────
+// Лист «Задание» — колонки исходного шаблона в том же порядке; вместо ручных диапазонов кадров
+// пишем то, что знает система: имя первого фото и номера первого и последнего фото товара.
+// Лист «Фото» — каждое фото отдельной строкой со ссылками.
+const XLS_STATUS = it => it.status === 'done' ? 'снят' : it.status === 'absent' ? 'нет на приёмке'
+  : num(it.photos_stored) ? 'снимается' : 'не снят';
+function exportTaskXlsx(d) {
+  const t = d.task, items = (d.items || []).slice()
+    .sort((a, b) => (a.row_no == null ? 1e9 : num(a.row_no)) - (b.row_no == null ? 1e9 : num(b.row_no)) || num(a.id) - num(b.id));
+  const stored = it => (it.photos || []).filter(p => p.status === 'stored' && p.file_url)
+    .sort((a, b) => num(a.photo_index) - num(b.photo_index));
+  const H = ['№ з/п', 'Код1С8', 'Номенклатура', 'Осн. комірка', 'Артикул', 'Бренд', 'Од. вим.', 'В наявності',
+    'Файл картинки', 'Нач знач', 'Кон знач', 'Кол-во фото', 'Проверка пересечения диапазонов',
+    'Проверка последов-сти номеров', 'Проверка кол-ва фото', 'Проверка дублей код1С', 'Статус', 'Комментарий'];
+  const n = items.length, last = n + 1;
+  const codeCount = {};
+  items.forEach(it => { codeCount[it.code_1c] = (codeCount[it.code_1c] || 0) + 1; });
+  const aoa = [H];
+  items.forEach(it => {
+    const ph = stored(it), cnt = ph.length;
+    aoa.push([
+      it.row_no == null ? '' : num(it.row_no), it.code_1c || '', it.name || '', it.cell || '', it.article || '', it.brand || '', '', '',
+      cnt ? ph[0].file_name : '', cnt ? num(ph[0].photo_index) : '', cnt ? num(ph[cnt - 1].photo_index) : '', cnt || '',
+      '', '', '', '', XLS_STATUS(it), it.comment || ''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // формулы шаблона, которые имеют смысл: количество фото и дубли кода 1С (значение посчитано сразу — на случай,
+  // если программа не пересчитает формулы при открытии). Проверки диапазонов кадров не нужны: номера выдаёт сервер.
+  items.forEach((it, i) => {
+    const r = i + 2, cnt = stored(it).length;
+    ws['O' + r] = { t: 's', f: `IF(AND(ISNUMBER(L${r}),OR(L${r}>${MAX_PHOTOS},L${r}<=${MIN_PHOTOS - 1})),"Проверьте кол-во","")`,
+      v: cnt && (cnt > MAX_PHOTOS || cnt <= MIN_PHOTOS - 1) ? 'Проверьте кол-во' : '' };
+    ws['P' + r] = { t: 's', f: `IF(COUNTIF(B$2:B$${last},B${r})>1,"Дублируется","")`, v: codeCount[it.code_1c] > 1 ? 'Дублируется' : '' };
+  });
+  ws['!cols'] = [6, 14, 48, 12, 16, 12, 8, 10, 30, 9, 9, 10, 14, 14, 16, 14, 15, 30].map(w => ({ wch: w }));
+  ws['!autofilter'] = { ref: 'A1:R' + Math.max(last, 1) };
+
+  const P = [['№ з/п', 'Код1С8', 'Артикул', 'Бренд', '№ фото', 'Имя файла', 'Оригинал', 'Белый фон', 'Засветка', 'Ширина', 'Высота', 'Размер, МБ', 'Снято']];
+  items.forEach(it => stored(it).forEach(p => P.push([
+    it.row_no == null ? '' : num(it.row_no), it.code_1c || '', it.article || '', it.brand || '', num(p.photo_index), p.file_name,
+    p.file_url, webUrl(p.file_url), lightUrl(p.file_url), num(p.width) || '', num(p.height) || '',
+    p.size_bytes ? Math.round(p.size_bytes / 10485.76) / 100 : '', p.shot_at ? new Date(p.shot_at).toLocaleString('ru-RU') : ''
+  ])));
+  const wp = XLSX.utils.aoa_to_sheet(P);
+  for (let r = 2; r <= P.length; r++) ['G', 'H', 'I'].forEach(c => { const cell = wp[c + r]; if (cell && cell.v) cell.l = { Target: String(cell.v) }; });
+  wp['!cols'] = [6, 14, 16, 12, 7, 30, 40, 40, 40, 8, 8, 10, 18].map(w => ({ wch: w }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Задание');
+  XLSX.utils.book_append_sheet(wb, wp, 'Фото');
+  const base = String(t.title || 'задание').replace(/[\\/:*?"<>|]+/g, '_').trim().slice(0, 80);
+  XLSX.writeFile(wb, base + ' — итог.xlsx');
+  const done = items.filter(i => i.status === 'done').length;
+  toast('Excel готов: снято ' + done + ' из ' + n);
 }
 
 // ─── фотографы для выбора ────────────────────────────────
