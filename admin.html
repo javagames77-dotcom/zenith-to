@@ -127,6 +127,36 @@ tr.click:hover td { background: var(--chip); }
 .lb .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 10px; width: 44px; height: 64px; font-size: 22px; cursor: pointer; }
 .lb .nav.l { left: 14px; } .lb .nav.r { right: 14px; }
 
+/* вход в админку: светлая карточка по центру — нарочно не похожа на тёмный экран входа в приложение фотографа */
+.auth { min-height: 100vh; display: none; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); }
+body.need-auth .auth { display: flex; }
+body.need-auth .top, body.need-auth .layout { display: none; }
+.auth-card { width: 100%; max-width: 400px; background: var(--sf); border: 1px solid var(--bd); border-radius: 18px; padding: 30px 28px 24px; box-shadow: 0 8px 30px rgba(0,0,0,.07); }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.auth-brand .logo { display: inline-flex; background: var(--logo-bg); border-radius: 6px; padding: 1px; }
+.auth-brand svg { height: 36px; width: auto; display: block; }
+.auth-brand b { font-size: 18px; } .auth-brand b span { color: var(--or); }
+.auth-badge { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--wa); background: var(--wa-bg); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
+.auth h1 { font-size: 22px; margin: 0 0 4px; }
+.auth .sub { color: var(--mu); margin: 0 0 18px; }
+.auth label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--mu); margin-bottom: 12px; }
+.auth .in { width: 100%; min-height: 44px; font-size: 15px; }
+.auth .btn.pri { width: 100%; min-height: 46px; font-size: 15px; margin-top: 4px; }
+.auth .err { margin: 12px 0 0; }
+.auth .foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--bd); color: var(--mu); font-size: 12.5px; }
+.top .who { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--mu); font-size: 12.5px; }
+.top .who b { color: var(--tx); font-size: 13px; }
+
+/* пользователи */
+.panel { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.panel h2 { font-size: 16px; margin: 0 0 10px; }
+.pass { display: flex; gap: 8px; }
+.pass .in { flex: 1; font-family: "PT Mono", ui-monospace, monospace; }
+.creds { background: var(--ok-bg); color: var(--ok); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.creds code { font-family: "PT Mono", ui-monospace, monospace; font-size: 15px; color: var(--tx); background: var(--sf); border-radius: 6px; padding: 1px 6px; }
+.uacts { display: flex; gap: 6px; flex-wrap: wrap; }
+.star { color: var(--or); font-size: 16px; }
+
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--tx); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
 .toast.on { opacity: 1; }
 
@@ -147,7 +177,7 @@ tr.click:hover td { background: var(--chip); }
 <header class="top">
   <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
   <b>Зеніт-Авто<span>.фото</span></b>
-  <span class="r">Пилот · администратор</span>
+  <span class="who"><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
 </header>
 
 <div class="layout">
@@ -156,7 +186,7 @@ tr.click:hover td { background: var(--chip); }
     <a href="#new" data-nav="new">Новое задание</a>
     <a class="soon" aria-disabled="true">Каталог</a>
     <a class="soon" aria-disabled="true">Связки кодов</a>
-    <a class="soon" aria-disabled="true">Пользователи</a>
+    <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
     <a class="soon" aria-disabled="true">Журнал</a>
   </nav>
   <main id="view" tabindex="-1"></main>
@@ -169,6 +199,7 @@ tr.click:hover td { background: var(--chip); }
   <div class="cap" id="lb-cap"></div>
   <button class="nav r" type="button" aria-label="Следующее фото" data-lb="next">›</button>
 </div>
+<div class="auth" id="auth"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -180,21 +211,37 @@ const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
 
 // ─── API ──────────────────────────────────────────────────
-async function api(path, { method = 'GET', body } = {}) {
+// Вход админки хранится отдельно от приложения фотографа (свои ключи), чтобы входы не путались.
+const AUTH_KEY = 'zf_admin_token', USER_KEY = 'zf_admin_user';
+const Auth = {
+  token: null, user: null,
+  load() { try { this.token = localStorage.getItem(AUTH_KEY); this.user = JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch (_) {} },
+  save(token, user) { this.token = token; this.user = user; try { localStorage.setItem(AUTH_KEY, token); localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch (_) {} },
+  clear() { this.token = null; this.user = null; try { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(USER_KEY); } catch (_) {} },
+  isAdmin() { return !!this.user && this.user.role === 'admin'; }
+};
+Auth.load();
+
+async function api(path, { method = 'GET', body, auth = true } = {}) {
   let res;
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (auth && Auth.token) headers['Authorization'] = 'Bearer ' + Auth.token;
   try {
-    res = await fetch(API_BASE + path, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined
-    });
+    res = await fetch(API_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   } catch (e) {
     throw new Error('Нет связи с сервером');
   }
   let data = null;
   try { data = await res.json(); } catch (_) {}
+  if (res.status === 401 && auth && Auth.token) {      // вход истёк или отозван — на экран входа
+    Auth.clear(); showLogin((data && data.error) || 'Вход истёк, войдите снова');
+    throw new Error((data && data.error) || 'Нужно войти');
+  }
   if (!res.ok || !data || data.success === false) {
-    throw new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+    const e = new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+    e.status = res.status; e.data = data;
+    throw e;
   }
   return data;
 }
@@ -211,12 +258,10 @@ const thumbUrl = u => cld(u, 'c_fill,w_120,h_120,q_auto,f_auto');
 const midUrl = u => cld(u, 'c_fill,w_420,h_420,q_auto,f_auto');
 const bigUrl = u => cld(u, 'c_limit,w_1800,h_1800,q_auto,f_auto');
 // «Каталожная» версия на белом фоне: тот же файл с суффиксом _web
-const verUrl = (u, suf) => u ? u.replace(/\/v\d+\//, '/').replace(/(\.[a-z0-9]+)$/i, suf + '$1') : '';
-const webUrl = u => verUrl(u, '_web');      // вырезано на белом
-const lightUrl = u => verUrl(u, '_light');  // засвеченный фон
+const webUrl = u => u ? u.replace(/\/v\d+\//, '/').replace(/(\.[a-z0-9]+)$/i, '_web$1') : '';
 let bgMode = 'orig';   // orig | web
 try { bgMode = localStorage.getItem('zf-bg') || 'orig'; } catch (_) {}
-const pick = u => bgMode === 'web' ? webUrl(u) : bgMode === 'light' ? lightUrl(u) : u;
+const pick = u => bgMode === 'web' ? webUrl(u) : u;
 const lowRes = p => p.width && p.height && Math.max(p.width, p.height) < LOW_RES_PX;
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
@@ -246,10 +291,12 @@ const routes = [
   [/^#?(tasks)?$/, () => viewTasks()],
   [/^#new$/, () => viewNew()],
   [/^#task-(\d+)$/, m => viewTask(m[1])],
-  [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])]
+  [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
+  [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')]
 ];
 function navOn(key) { document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key)); }
 function route() {
+  if (!Auth.token) return showLogin();
   const h = location.hash || '#tasks';
   for (const [re, fn] of routes) { const m = h.match(re); if (m) { fn(m); view.focus({ preventScroll: true }); window.scrollTo(0, 0); return; } }
   location.hash = '#tasks';
@@ -545,8 +592,8 @@ async function viewItem(taskId, itemId) {
     <div class="split">
       <div class="card">
         <div class="bar" style="justify-content:space-between;margin-bottom:10px"><b>Фото · ${n}</b>
-          <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button><button type="button" data-bg="light" class="${bgMode === 'light' ? 'on' : ''}">Засветка</button></span></div>
-        <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон и засветка делаются автоматически через несколько секунд после загрузки</div>
+          <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button></span></div>
+        <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон делается автоматически через несколько секунд после загрузки</div>
         ${n < MIN_PHOTOS ? `<div class="note">${n ? 'Снято ' + n + ' из минимум ' + MIN_PHOTOS : 'Фото ещё нет'}.</div>` : ''}
         ${n ? `<div class="gal">${photos.map((p, k) => `
           <figure class="${k === 0 ? 'first' : ''}" data-k="${k}" tabindex="0" role="button" aria-label="Открыть фото ${esc(p.file_name)}">
@@ -554,7 +601,7 @@ async function viewItem(taskId, itemId) {
             <figcaption><span class="fn" title="${esc(p.file_name)}">${esc(p.file_name)}</span>
               <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
               ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}
-              <span class="noweb" hidden><span class="pill">${bgMode === 'light' ? 'засветки нет' : 'белого фона нет'}</span></span></figcaption>
+              <span class="noweb" hidden><span class="pill">белого фона нет</span></span></figcaption>
           </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
       </div>
       <div class="card">
@@ -600,6 +647,229 @@ async function viewItem(taskId, itemId) {
   });
 }
 
+// ─── Вход в админку ──────────────────────────────────────
+const ROLE_RU = { admin: 'администратор', manager: 'менеджер', photographer: 'фотограф' };
+const PWA_URL = 'https://zenith-to.onrender.com/paw/';
+const authBrand = `<div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.фото</span></b></div>`;
+function drawWho() {
+  const u = Auth.user;
+  $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
+  $('#nav-users').hidden = !Auth.isAdmin();
+}
+function showLogin(msg) {
+  document.body.classList.add('need-auth');
+  document.title = 'Вход в админку — Зеніт-Авто.фото';
+  const box = $('#auth');
+  box.innerHTML = `<div class="auth-card">${authBrand}<div class="loading" style="padding:20px 0">Проверяю…</div></div>`;
+  api('/photo/auth/status', { auth: false })
+    .then(d => d.has_users ? drawLoginForm(msg) : drawSetupForm())
+    .catch(e => { box.innerHTML = `<div class="auth-card">${authBrand}<div class="err">${esc(e.message)}</div><button class="btn" type="button" id="auth-retry">Повторить</button></div>`; $('#auth-retry').onclick = () => showLogin(msg); });
+}
+function drawLoginForm(msg) {
+  $('#auth').innerHTML = `<form class="auth-card" id="admin-login-form" name="admin-login" novalidate>
+    ${authBrand}
+    <div class="auth-badge">Админка</div>
+    <h1>Вход для менеджеров</h1>
+    <p class="sub">Задания, проверка фото, пользователи</p>
+    <label>Логин<input class="in" id="al-login" name="admin-login-name" autocomplete="section-admin username" autocapitalize="none" spellcheck="false" required></label>
+    <label>Пароль<input class="in" id="al-pass" name="admin-login-password" type="password" autocomplete="section-admin current-password" required></label>
+    <button class="btn pri" type="submit" id="al-go">Войти в админку</button>
+    <div id="al-err"></div>
+    <div class="foot">Фотограф? Вам сюда не нужно: войдите в приложение на телефоне — <a href="${PWA_URL}">${PWA_URL.replace('https://', '')}</a></div>
+  </form>`;
+  if (msg) $('#al-err').innerHTML = '<div class="note">' + esc(msg) + '</div>';
+  const f = $('#admin-login-form');
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const login = $('#al-login').value.trim(), password = $('#al-pass').value;
+    if (!login || !password) { $('#al-err').innerHTML = '<div class="err">Введите логин и пароль</div>'; return; }
+    const b = $('#al-go'); b.disabled = true; b.textContent = 'Входим…';
+    try {
+      const d = await api('/photo/auth/login', { method: 'POST', auth: false, body: { login, password, scope: 'admin', device: navigator.userAgent.slice(0, 120) } });
+      Auth.save(d.token, d.user); enterApp();
+    } catch (err) {
+      $('#al-err').innerHTML = '<div class="err">' + esc(err.message) + (err.data && err.data.wrong_app ? `<br><a href="${PWA_URL}">Открыть приложение фотографа</a>` : '') + '</div>';
+      b.disabled = false; b.textContent = 'Войти в админку';
+    }
+  };
+  $('#al-login').focus();
+}
+function drawSetupForm() {
+  $('#auth').innerHTML = `<form class="auth-card" id="admin-setup-form" novalidate>
+    ${authBrand}
+    <div class="auth-badge">Первый запуск</div>
+    <h1>Создайте администратора</h1>
+    <p class="sub">Пользователей ещё нет. Этот экран появляется один раз: после создания администратора остальных добавляют в разделе «Пользователи».</p>
+    <label>Имя и фамилия<input class="in" id="as-name" autocomplete="name" required></label>
+    <label>Логин<input class="in" id="as-login" autocomplete="section-admin username" autocapitalize="none" spellcheck="false" placeholder="латиница, например admin" required></label>
+    <label>Пароль<input class="in" id="as-pass" type="password" autocomplete="section-admin new-password" placeholder="не меньше 6 символов" required></label>
+    <label>Пароль ещё раз<input class="in" id="as-pass2" type="password" autocomplete="section-admin new-password" required></label>
+    <button class="btn pri" type="submit" id="as-go">Создать и войти</button>
+    <div id="as-err"></div>
+  </form>`;
+  $('#admin-setup-form').onsubmit = async e => {
+    e.preventDefault();
+    const full_name = $('#as-name').value.trim(), login = $('#as-login').value.trim().toLowerCase(), password = $('#as-pass').value;
+    const err = m => { $('#as-err').innerHTML = '<div class="err">' + esc(m) + '</div>'; };
+    if (password !== $('#as-pass2').value) return err('Пароли не совпадают');
+    const b = $('#as-go'); b.disabled = true;
+    try {
+      const d = await api('/photo/auth/setup', { method: 'POST', auth: false, body: { full_name, login, password } });
+      Auth.save(d.token, d.user); enterApp(); toast('Администратор создан');
+    } catch (ex) { err(ex.message); b.disabled = false; }
+  };
+  $('#as-name').focus();
+}
+function enterApp() {
+  document.body.classList.remove('need-auth');
+  document.title = 'Зеніт-Авто.фото — админка';
+  $('#auth').innerHTML = '';
+  drawWho();
+  route();
+}
+$('#logout').onclick = async () => {
+  if (!confirm('Выйти из админки?')) return;
+  const t = Auth.token;
+  Auth.clear();
+  try { await fetch(API_BASE + '/photo/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }); } catch (_) {}
+  showLogin();
+};
+async function boot() {
+  if (!Auth.token) return showLogin();
+  drawWho();
+  try {
+    const d = await api('/photo/auth/me?scope=admin');
+    Auth.save(Auth.token, d.user); enterApp();
+  } catch (e) {
+    if (!Auth.token) return;                       // 401 уже показал вход
+    if (e.status === 403) { Auth.clear(); return showLogin(e.message); }
+    enterApp();                                    // нет сети — работаем с сохранённым входом, API скажет сам
+  }
+}
+
+// ─── Пользователи (только администратор) ─────────────────
+function genPassword() {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const a = new Uint32Array(8); crypto.getRandomValues(a);
+  return Array.from(a, x => abc[x % abc.length]).join('');
+}
+let usersPanel = null;   // { kind: 'create'|'edit'|'reset', id }
+let usersCreds = null;   // { login, password, full_name } — показать один раз после создания/сброса
+async function viewUsers() {
+  navOn('users');
+  loading();
+  let d;
+  try { d = await api('/photo/admin/users'); } catch (e) { return showError(e, viewUsers); }
+  const users = d.users || [];
+  const me = Auth.user ? Auth.user.id : 0;
+  const photographers = users.filter(u => u.role === 'photographer' && u.is_active);
+  const defaultId = (users.find(u => u.is_default_photographer) || photographers[0] || {}).id;
+  const userPill = u => !u.is_active ? '<span class="pill">заблокирован</span>'
+    : u.locked ? '<span class="pill er">подбор пароля — пауза 15 мин</span>' : '<span class="pill ok">активен</span>';
+  const roleOpts = sel => ['photographer', 'manager', 'admin'].map(r => `<option value="${r}"${r === sel ? ' selected' : ''}>${ROLE_RU[r]}</option>`).join('');
+  const editing = usersPanel && usersPanel.id ? users.find(u => u.id === usersPanel.id) : null;
+
+  let panel = '';
+  if (usersPanel && usersPanel.kind === 'create') {
+    panel = `<form class="panel" id="u-form"><h2>Новый пользователь</h2><div class="form">
+      <label>Имя и фамилия<input class="in" id="u-name" required></label>
+      <label>Логин<input class="in" id="u-login" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="латиница, например melnik"></label>
+      <label>Роль<select class="in" id="u-role">${roleOpts('photographer')}</select></label>
+      <label>Временный пароль<span class="pass"><input class="in" id="u-pass" autocomplete="off" value="${genPassword()}"><button class="btn sm" type="button" id="u-gen">Другой</button></span></label>
+    </div><div class="bar"><button class="btn pri" type="submit">Создать</button><button class="btn" type="button" id="u-cancel">Отмена</button></div></form>`;
+  } else if (usersPanel && usersPanel.kind === 'edit' && editing) {
+    const self = editing.id === me;
+    panel = `<form class="panel" id="u-form"><h2>Изменить: ${esc(editing.full_name)}</h2><div class="form">
+      <label>Имя и фамилия<input class="in" id="u-name" value="${esc(editing.full_name)}"></label>
+      <label>Роль<select class="in" id="u-role"${self ? ' disabled' : ''}>${roleOpts(editing.role)}</select></label>
+    </div>${self ? '<p class="mu">Свою роль меняет другой администратор.</p>' : '<p class="mu">При смене роли сотрудника выкинет со всех устройств: войти нужно будет заново, уже в своё приложение.</p>'}
+    <div class="bar"><button class="btn pri" type="submit">Сохранить</button><button class="btn" type="button" id="u-cancel">Отмена</button></div></form>`;
+  } else if (usersPanel && usersPanel.kind === 'reset' && editing) {
+    panel = `<form class="panel" id="u-form"><h2>Новый пароль: ${esc(editing.full_name)}</h2><div class="form">
+      <label>Пароль<span class="pass"><input class="in" id="u-pass" autocomplete="off" value="${genPassword()}"><button class="btn sm" type="button" id="u-gen">Другой</button></span></label>
+    </div><p class="mu">${editing.id === me ? 'Ваш текущий вход сохранится.' : 'Сотрудника выкинет со всех устройств, войти нужно будет с новым паролем.'}</p>
+    <div class="bar"><button class="btn pri" type="submit">Сменить пароль</button><button class="btn" type="button" id="u-cancel">Отмена</button></div></form>`;
+  }
+
+  const creds = usersCreds ? `<div class="creds"><b>Передайте ${esc(usersCreds.full_name)}:</b> логин <code>${esc(usersCreds.login)}</code> пароль <code>${esc(usersCreds.password)}</code>
+    <button class="btn sm" type="button" id="u-copy">Скопировать</button><br><span class="mu">Пароль показывается один раз. ${usersCreds.role === 'photographer' ? 'Фотограф входит в приложение на телефоне: ' + PWA_URL : 'Вход в админку: ' + location.origin + location.pathname}</span></div>` : '';
+
+  const rows = users.map(u => {
+    const self = u.id === me;
+    const acts = [];
+    acts.push(`<button class="btn sm" data-u="edit" data-id="${u.id}">Изменить</button>`);
+    acts.push(`<button class="btn sm" data-u="reset" data-id="${u.id}">Пароль</button>`);
+    if (u.locked) acts.push(`<button class="btn sm" data-u="unlock" data-id="${u.id}">Снять паузу</button>`);
+    if (u.role === 'photographer' && u.is_active && u.id !== defaultId) acts.push(`<button class="btn sm" data-u="default" data-id="${u.id}">По умолчанию</button>`);
+    if (num(u.sessions) && !self) acts.push(`<button class="btn sm" data-u="logout_all" data-id="${u.id}">Выйти везде</button>`);
+    if (!self) acts.push(u.is_active ? `<button class="btn sm" data-u="block" data-id="${u.id}">Заблокировать</button>` : `<button class="btn sm" data-u="unblock" data-id="${u.id}">Разблокировать</button>`);
+    const seen = u.role === 'photographer'
+      ? (u.last_device || u.app_version ? esc([u.last_device, u.app_version].filter(Boolean).join(' · ')) + '<div class="mu">' + fmtDate(u.last_seen_at) + '</div>' : '<span class="mu">ещё не входил</span>')
+      : (u.last_seen_at ? fmtDate(u.last_seen_at) : '<span class="mu">ещё не входил</span>');
+    return `<tr${u.is_active ? '' : ' class="mu"'}>
+      <td><b>${esc(u.full_name)}</b>${self ? ' <span class="pill bl">вы</span>' : ''}<div class="mu mono">${esc(u.login)}</div></td>
+      <td>${esc(ROLE_RU[u.role] || u.role)}${u.role === 'photographer' && u.id === defaultId ? ' <span class="star" title="Фотограф по умолчанию: подставляется в новые задания">★</span>' : ''}</td>
+      <td>${userPill(u)}</td>
+      <td>${seen}</td>
+      <td><div class="uacts">${acts.join('')}</div></td>
+    </tr>`;
+  }).join('');
+
+  view.innerHTML = `<div class="hd"><div><h1>Пользователи</h1>
+      <div class="sub">Учётные записи создаёт администратор. Фотограф входит в приложение один раз, дальше без пароля. ★ — фотограф по умолчанию для новых заданий.</div></div>
+      <div class="bar"><button class="btn pri" type="button" id="u-add">Добавить</button></div></div>
+    ${creds}${panel}
+    <div class="tw"><table><tr><th>Имя и логин</th><th>Роль</th><th>Статус</th><th>Последний вход</th><th></th></tr>${rows || '<tr><td colspan="5" class="empty">Пользователей нет</td></tr>'}</table></div>`;
+
+  const redraw = () => viewUsers();
+  $('#u-add').onclick = () => { usersPanel = { kind: 'create' }; usersCreds = null; redraw(); };
+  if ($('#u-copy')) $('#u-copy').onclick = () => {
+    const t = 'Логин: ' + usersCreds.login + '\nПароль: ' + usersCreds.password + '\n' + (usersCreds.role === 'photographer' ? PWA_URL : location.origin + location.pathname);
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Скопировано'), () => toast('Скопируйте вручную'));
+  };
+  if ($('#u-cancel')) $('#u-cancel').onclick = () => { usersPanel = null; redraw(); };
+  if ($('#u-gen')) $('#u-gen').onclick = () => { $('#u-pass').value = genPassword(); };
+  if ($('#u-form')) $('#u-form').onsubmit = async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn.pri'); btn.disabled = true;
+    try {
+      if (usersPanel.kind === 'create') {
+        const body = { action: 'create', full_name: $('#u-name').value.trim(), login: $('#u-login').value.trim().toLowerCase(), role: $('#u-role').value, password: $('#u-pass').value };
+        await api('/photo/admin/user-action', { method: 'POST', body });
+        usersCreds = { full_name: body.full_name, login: body.login, password: body.password, role: body.role };
+      } else if (usersPanel.kind === 'edit') {
+        const body = { action: 'update', id: editing.id, full_name: $('#u-name').value.trim() };
+        if (editing.id !== me) body.role = $('#u-role').value;
+        const r = await api('/photo/admin/user-action', { method: 'POST', body });
+        if (editing.id === me && r.user) { Auth.save(Auth.token, r.user); drawWho(); }
+        toast('Сохранено');
+      } else if (usersPanel.kind === 'reset') {
+        const password = $('#u-pass').value;
+        await api('/photo/admin/user-action', { method: 'POST', body: { action: 'reset_password', id: editing.id, password } });
+        usersCreds = { full_name: editing.full_name, login: editing.login, password, role: editing.role };
+      }
+      usersPanel = null; redraw();
+    } catch (ex) { toast(ex.message); btn.disabled = false; }
+  };
+  view.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => {
+    const id = num(b.dataset.id), u = users.find(x => x.id === id), k = b.dataset.u;
+    if (k === 'edit' || k === 'reset') { usersPanel = { kind: k, id }; usersCreds = null; return redraw(); }
+    const map = {
+      unlock: ['unlock', {}, null],
+      default: ['set_default', {}, null],
+      logout_all: ['logout_all', {}, 'Выкинуть ' + u.full_name + ' со всех устройств? Войти можно будет снова с тем же паролем.'],
+      block: ['set_active', { is_active: false }, 'Заблокировать ' + u.full_name + '? Сотрудника сразу выкинет со всех устройств, войти он не сможет.'],
+      unblock: ['set_active', { is_active: true }, null]
+    };
+    const [action, extra, ask] = map[k];
+    if (ask && !confirm(ask)) return;
+    b.disabled = true;
+    try { await api('/photo/admin/user-action', { method: 'POST', body: { action, id, ...extra } }); usersCreds = null; redraw(); }
+    catch (ex) { toast(ex.message); b.disabled = false; }
+  });
+  if ($('#u-name') && usersPanel && usersPanel.kind === 'create') $('#u-name').focus();
+}
+
 // ─── просмотр фото ────────────────────────────────────────
 const lb = { list: [], k: 0, back: null };
 function openLB(list, k) { lb.list = list; lb.k = k; lb.back = document.activeElement; $('#lb').classList.add('on'); drawLB(); $('#lb .x').focus(); }
@@ -611,7 +881,7 @@ function drawLB() {
   img.dataset.fallback = '';
   img.src = bigUrl(pick(p.file_url));
   $('#lb-img').alt = p.file_name;
-  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a><a href="${esc(webUrl(p.file_url))}" target="_blank" rel="noopener">Белый фон ↗</a><a href="${esc(lightUrl(p.file_url))}" target="_blank" rel="noopener">Засветка ↗</a>`;
+  $('#lb-cap').innerHTML = `<span class="mono">${esc(p.file_name)}</span><span>${p.width}×${p.height} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span><span>${lb.k + 1} / ${lb.list.length}</span><a href="${esc(p.file_url)}" target="_blank" rel="noopener">Оригинал ↗</a><a href="${esc(webUrl(p.file_url))}" target="_blank" rel="noopener">Белый фон ↗</a>`;
 }
 $('#lb').addEventListener('click', e => {
   const a = e.target.dataset.lb;
@@ -626,7 +896,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
 });
 
-route();
+boot();
 </script>
 </body>
 </html>
