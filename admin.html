@@ -475,7 +475,7 @@ function renderPreview(file, parsed) {
     <div class="card" style="margin-bottom:12px">
       <div class="form">
         <label>Название задания<input class="in" id="f-title" value="${esc(todayTitle())}"></label>
-        <label>Фотограф<input class="in" id="f-ph" placeholder="Например, Мельник А."></label>
+        <label>Фотограф<select class="in" id="f-ph" disabled><option>Загрузка…</option></select></label>
         <label>Файл<input class="in" value="${esc(file.name)} · лист «${esc(parsed.sheet)}»" disabled></label>
       </div>
       <div class="bar"><button class="btn pri" type="button" id="create" ${toSend.length ? '' : 'disabled'}>Создать задание · ${toSend.length} ${plural(toSend.length, 'товар', 'товара', 'товаров')}</button>
@@ -499,13 +499,20 @@ function renderPreview(file, parsed) {
   pv.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
   draw();
   $('#again').onclick = () => { $('#file').value = ''; $('#file').click(); };
+  loadPhotographers(true).then(d => {
+    const sel = $('#f-ph'); if (!sel) return;
+    const list = d.photographers || [];
+    if (!list.length) { sel.innerHTML = '<option value="">Нет фотографов — добавьте в «Пользователях»</option>'; return; }
+    sel.innerHTML = phOptions(list, d.default_id); sel.disabled = false;
+  }).catch(e => { const sel = $('#f-ph'); if (sel) sel.innerHTML = '<option value="">' + esc(e.message) + '</option>'; });
   $('#create').onclick = async () => {
     const title = $('#f-title').value.trim();
     if (!title) { toast('Укажите название задания'); $('#f-title').focus(); return; }
+    if (!num($('#f-ph').value)) { toast('Сначала создайте фотографа в разделе «Пользователи»'); return; }
     const btn = $('#create'); btn.disabled = true; btn.textContent = 'Создаю…';
     try {
       const r = await api('/photo/admin/import', { method: 'POST', body: {
-        title, file_name: file.name, photographer: $('#f-ph').value.trim(),
+        title, file_name: file.name, assigned_user_id: num($('#f-ph').value) || null,
         items: toSend.map(i => ({ row_no: i.row_no, code_1c: i.code_1c, name: i.name, article: i.article, brand: i.brand, cell: i.cell }))
       }});
       toast('Задание создано: ' + r.items_created + ' ' + plural(r.items_created, 'товар', 'товара', 'товаров'));
@@ -535,8 +542,8 @@ async function viewTask(id) {
   const pct = items.length ? Math.round(done / items.length * 100) : 0;
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
-    <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.photographer ? ' · фотограф ' + esc(t.photographer) : ''}</div></div>
-      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+    <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}</div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
     <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
     <div class="tabs" role="tablist">
@@ -572,6 +579,22 @@ async function viewTask(id) {
   view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
   $('#refresh').onclick = () => viewTask(id);
+  loadPhotographers().then(dd => {
+    const sel = $('#t-ph'); if (!sel) return;
+    const list = (dd.photographers || []).slice();
+    if (t.assigned_user_id && !list.some(p => num(p.id) === num(t.assigned_user_id))) list.unshift({ id: t.assigned_user_id, full_name: (t.photographer || 'фотограф') + ' (заблокирован)' });
+    sel.innerHTML = (t.assigned_user_id ? '' : '<option value="">не назначен</option>') + phOptions(list, t.assigned_user_id);
+    sel.onchange = async () => {
+      const uid = num(sel.value); if (!uid) return;
+      sel.disabled = true;
+      try {
+        const r = await api('/photo/task-assign', { method: 'POST', body: { task_id: num(id), user_id: uid } });
+        t.assigned_user_id = r.assigned_user_id; t.photographer = r.photographer;
+        toast('Задание передано: ' + r.photographer);
+      } catch (e) { toast(e.message); }
+      sel.disabled = false;
+    };
+  }).catch(() => {});
   draw();
 }
 
@@ -645,6 +668,16 @@ async function viewItem(taskId, itemId) {
     f.onclick = () => openLB(photos, +f.dataset.k);
     f.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLB(photos, +f.dataset.k); } };
   });
+}
+
+// ─── фотографы для выбора ────────────────────────────────
+let phCache = null;
+async function loadPhotographers(force) {
+  if (!phCache || force) phCache = await api('/photo/photographers');
+  return phCache;
+}
+function phOptions(list, selected) {
+  return list.map(p => `<option value="${p.id}"${num(p.id) === num(selected) ? ' selected' : ''}>${esc(p.full_name)}</option>`).join('');
 }
 
 // ─── Вход в админку ──────────────────────────────────────
