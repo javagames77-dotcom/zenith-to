@@ -3,8 +3,8 @@
 // Чтение из n8n (GET): всегда в сеть; без сети — ответ с маркером X-ZF-Offline.
 // Отправка (POST) идёт мимо service worker.
 // Push: показ уведомления и переход к заданию/товару по нажатию.
-const CACHE = 'zf-pwa-v10';
-const SHELL = ['./', './index.html', './app.js?v=10', './manifest.json', './vendor/zxing-reader.js', './vendor/zxing_reader.wasm',
+const CACHE = 'zf-pwa-v11';
+const SHELL = ['./', './index.html', './app.js?v=11', './manifest.json', './vendor/zxing-reader.js', './vendor/zxing_reader.wasm',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
