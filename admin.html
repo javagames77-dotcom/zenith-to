@@ -48,6 +48,7 @@ a { color: var(--bl); }
 .side a.on { background: var(--or-soft); color: var(--wa); font-weight: 700; box-shadow: inset 3px 0 0 var(--or); }
 .side a.soon { color: var(--mu); }
 .side a.soon::after { content: "скоро"; font-size: 10.5px; background: var(--chip); border-radius: 999px; padding: 0 7px; }
+:root[lang="uk"] .side a.soon::after { content: "незабаром"; }
 main { padding: 20px 24px 40px; min-width: 0; }
 main:focus { outline: none; }
 .hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -158,6 +159,12 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 .uacts { display: flex; gap: 6px; flex-wrap: wrap; }
 .star { color: var(--or); font-size: 16px; }
 
+/* переключатель языка */
+.lsw { display: inline-flex; border: 1px solid var(--bd); border-radius: 999px; overflow: hidden; flex: none; }
+.lsw button { border: 0; background: none; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--mu); cursor: pointer; }
+.lsw button.on { background: var(--or); color: var(--on-or); }
+.auth-card .lsw { float: right; }
+
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--tx); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
 .toast.on { opacity: 1; }
 
@@ -178,7 +185,7 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 <header class="top">
   <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
   <b>Зеніт-Авто<span>.фото</span></b>
-  <span class="who"><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
+  <span class="who"><span class="lsw" data-lang-switch></span><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
 </header>
 
 <div class="layout">
@@ -207,6 +214,290 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 // ═══════════════════════════════════════════════════════════
 // Зеніт-Авто.фото — админка (пилот)
 // ═══════════════════════════════════════════════════════════
+// Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
+const I18N_UK = {
+  // ── общее ──
+  'Загрузка…': 'Завантаження…', 'Повторить': 'Повторити', 'Обновить': 'Оновити', 'Отмена': 'Скасувати',
+  'Сохранить': 'Зберегти', 'Сохранено': 'Збережено', 'Создать': 'Створити', 'Добавить': 'Додати', 'Изменить': 'Змінити',
+  'Закрыть': 'Закрити', 'Выйти': 'Вийти', 'Проверяю…': 'Перевіряю…', 'Скопировать': 'Скопіювати',
+  'Скопировано': 'Скопійовано', 'Скопируйте вручную': 'Скопіюйте вручну', 'Другой': 'Інший', 'ок': 'ок', 'вы': 'ви',
+  'Нет связи с сервером': 'Немає зв’язку із сервером', 'Нужно войти': 'Потрібно увійти',
+  'Вход истёк, войдите снова': 'Вхід закінчився, увійдіть знову', 'Ошибка базы данных': 'Помилка бази даних',
+  'Пустой ответ базы': 'Порожня відповідь бази', 'Ошибка': 'Помилка', 'Недостаточно прав': 'Недостатньо прав',
+  'Разделы': 'Розділи', 'Просмотр фото': 'Перегляд фото', 'Предыдущее фото': 'Попереднє фото', 'Следующее фото': 'Наступне фото',
+  'Зеніт-Авто.фото — админка': 'Зеніт-Авто.фото — адмінка', 'Зеніт-Авто.фото — администратор': 'Зеніт-Авто.фото — адміністратор',
+  'Вход в админку — Зеніт-Авто.фото': 'Вхід до адмінки — Зеніт-Авто.фото',
+  // ── меню ──
+  'Задания': 'Завдання', 'Новое задание': 'Нове завдання', 'Каталог': 'Каталог', 'Связки кодов': 'Зв’язки кодів',
+  'Пользователи': 'Користувачі', 'Журнал': 'Журнал', '← Задания': '← Завдання',
+  // ── роли ──
+  'администратор': 'адміністратор', 'менеджер': 'менеджер', 'фотограф': 'фотограф', 'Админка': 'Адмінка',
+  // ── вход ──
+  'Вход для менеджеров': 'Вхід для менеджерів', 'Задания, проверка фото, пользователи': 'Завдання, перевірка фото, користувачі',
+  'Логин': 'Логін', 'Пароль': 'Пароль', 'Войти в админку': 'Увійти в адмінку', 'Входим…': 'Входимо…',
+  'Введите логин и пароль': 'Введіть логін і пароль', 'Открыть приложение фотографа': 'Відкрити застосунок фотографа',
+  'Фотограф? Вам сюда не нужно: войдите в приложение на телефоне —': 'Фотограф? Вам сюди не треба: увійдіть у застосунок на телефоні —',
+  'Первый запуск': 'Перший запуск', 'Создайте администратора': 'Створіть адміністратора',
+  'Пользователей ещё нет. Этот экран появляется один раз: после создания администратора остальных добавляют в разделе «Пользователи».':
+    'Користувачів ще немає. Цей екран з’являється один раз: після створення адміністратора решту додають у розділі «Користувачі».',
+  'Имя и фамилия': 'Ім’я та прізвище', 'Пароль ещё раз': 'Пароль ще раз', 'Создать и войти': 'Створити та увійти',
+  'латиница, например admin': 'латиниця, наприклад admin', 'не меньше 6 символов': 'не менше 6 символів',
+  'Пароли не совпадают': 'Паролі не збігаються', 'Администратор создан': 'Адміністратора створено',
+  'Выйти из админки?': 'Вийти з адмінки?',
+  // ── ответы сервера ──
+  'Неверный логин или пароль': 'Неправильний логін або пароль',
+  'Вы фотограф: входите в приложение фотографа на телефоне, а не в админку': 'Ви фотограф: входьте в застосунок фотографа на телефоні, а не в адмінку',
+  'Это приложение фотографа. Менеджеры и администратор работают в админке': 'Це застосунок фотографа. Менеджери та адміністратор працюють в адмінці',
+  'Это вход фотографа. Админка — для менеджеров и администратора': 'Це вхід фотографа. Адмінка — для менеджерів і адміністратора',
+  'Это вход админки. Приложение — только для фотографов': 'Це вхід адмінки. Застосунок — лише для фотографів',
+  'Учётная запись заблокирована': 'Обліковий запис заблоковано',
+  'Учётная запись заблокирована. Обратитесь к администратору': 'Обліковий запис заблоковано. Зверніться до адміністратора',
+  'Администратор уже создан. Войдите со своим логином': 'Адміністратора вже створено. Увійдіть зі своїм логіном',
+  'Логин: 3–32 символа, латиница, цифры, точка, «_» и «-»': 'Логін: 3–32 символи, латиниця, цифри, крапка, «_» і «-»',
+  'Имя: от 2 до 100 символов': 'Ім’я: від 2 до 100 символів', 'Пароль: от 6 до 72 символов': 'Пароль: від 6 до 72 символів',
+  'Роль: администратор, менеджер или фотограф': 'Роль: адміністратор, менеджер або фотограф',
+  'Это единственный администратор: сначала назначьте другого': 'Це єдиний адміністратор: спершу призначте іншого',
+  'Свою роль и доступ меняет другой администратор': 'Свою роль і доступ змінює інший адміністратор',
+  'Пользователь не найден': 'Користувача не знайдено', 'Неизвестное действие': 'Невідома дія', 'Неизвестное приложение': 'Невідомий застосунок',
+  'По умолчанию можно выбрать только активного фотографа': 'За замовчуванням можна вибрати лише активного фотографа',
+  'Выберите активного фотографа': 'Виберіть активного фотографа', 'Задание не найдено': 'Завдання не знайдено',
+  'Товар не найден': 'Товар не знайдено', 'Название задания обязательно': 'Назва завдання обов’язкова',
+  'В задании нет товаров': 'У завданні немає товарів', 'Слишком много строк (больше 5000)': 'Забагато рядків (понад 5000)',
+  'Артикул обязателен': 'Артикул обов’язковий', 'Бренд обязателен (нужен для имени файла)': 'Бренд обов’язковий (потрібен для назви файлу)',
+  'Не удалось добавить товар': 'Не вдалося додати товар', 'Фото обязательно': 'Фото обов’язкове',
+  'photo_uid обязателен (UUID)': 'photo_uid обов’язковий (UUID)', 'item_id обязателен': 'item_id обов’язковий',
+  'task_id обязателен': 'task_id обов’язковий', 'seq обязателен': 'seq обов’язковий', 'status: todo, done или absent': 'status: todo, done або absent',
+  'Язык: uk или ru': 'Мова: uk або ru',
+  // ── список заданий ──
+  'Задания из Excel и их ход съёмки': 'Завдання з Excel і хід зйомки', 'Загрузить Excel': 'Завантажити Excel',
+  'Задание': 'Завдання', 'Фотограф': 'Фотограф', 'Снято': 'Знято', 'Фото': 'Фото', 'Статус': 'Статус', 'Флаги': 'Прапорці',
+  'Снято товаров': 'Знято товарів', 'Товаров в работе': 'Товарів у роботі', 'Мало фото': 'Мало фото', 'В очереди': 'У черзі',
+  'в работе': 'у роботі', 'закрыто': 'закрито', 'Закрыт': 'Закрито', 'без файла': 'без файлу',
+  'Заданий пока нет.': 'Завдань поки немає.', 'Загрузите Excel': 'Завантажте Excel', ', чтобы создать первое.': ', щоб створити перше.',
+  // ── новое задание ──
+  'Новое задание из Excel': 'Нове завдання з Excel',
+  'Шаблон «Список товаров для фото на приёмке». Колонки ищутся по названию, пустые строки пропускаются.':
+    'Шаблон «Список товарів для фото на прийманні». Колонки шукаються за назвою, порожні рядки пропускаються.',
+  'Выберите файл Excel или перетащите сюда': 'Виберіть файл Excel або перетягніть сюди',
+  '.xlsx или .xls · используется первый лист': '.xlsx або .xls · використовується перший аркуш',
+  'Читаю файл…': 'Читаю файл…', 'Библиотека чтения Excel не загрузилась. Проверьте интернет и обновите страницу.':
+    'Бібліотека читання Excel не завантажилася. Перевірте інтернет і оновіть сторінку.',
+  'Не найдены колонки «Код1С8» и «Артикул» в первых 20 строках первого листа': 'Не знайдено колонок «Код1С8» і «Артикул» у перших 20 рядках першого аркуша',
+  'Строк с товарами': 'Рядків із товарами', 'Готово к съёмке': 'Готово до зйомки', 'Предупреждения': 'Попередження', 'Ошибки': 'Помилки',
+  'Название задания': 'Назва завдання', 'Файл': 'Файл', 'Другой файл': 'Інший файл', 'Создать задание': 'Створити завдання',
+  'Создаю…': 'Створюю…', 'Строка': 'Рядок', 'Код 1С': 'Код 1С', 'Артикул': 'Артикул', 'Бренд': 'Бренд', 'Ячейка': 'Комірка',
+  'Номенклатура': 'Номенклатура', 'Проверка': 'Перевірка', 'Замечаний нет': 'Зауважень немає',
+  'нет кода 1С': 'немає коду 1С', 'нет артикула': 'немає артикула', 'Приёмка': 'Приймання',
+  'Нет фотографов — добавьте в «Пользователях»': 'Немає фотографів — додайте в «Користувачах»',
+  'Укажите название задания': 'Вкажіть назву завдання',
+  'Сначала создайте фотографа в разделе «Пользователи»': 'Спершу створіть фотографа в розділі «Користувачі»',
+  // ── задание ──
+  'Фотограф задания': 'Фотограф завдання', 'не назначен': 'не призначено', 'Скачать Excel': 'Завантажити Excel', 'Готовлю…': 'Готую…',
+  'Поиск по товарам': 'Пошук за товарами', 'Поиск: артикул, код 1С или название': 'Пошук: артикул, код 1С або назва',
+  'Ничего не найдено': 'Нічого не знайдено', 'Статус и флаги': 'Статус і прапорці', 'Артикул · код 1С': 'Артикул · код 1С',
+  'Товар не найден в задании': 'Товар не знайдено в завданні',
+  // ── товар ──
+  'Версия фото': 'Версія фото', 'Оригинал': 'Оригінал', 'Белый фон': 'Білий фон', 'Засветка': 'Засвітлення',
+  'Оригинал ↗': 'Оригінал ↗', 'Белый фон ↗': 'Білий фон ↗', 'Засветка ↗': 'Засвітлення ↗',
+  'белого фона нет': 'білого фону немає', 'засветки нет': 'засвітлення немає',
+  'Фото ещё нет': 'Фото ще немає', 'Фото ещё нет.': 'Фото ще немає.', 'Фотограф ещё не снял этот товар': 'Фотограф ще не зняв цей товар',
+  'Данные': 'Дані', 'Отметить снятым': 'Позначити знятим', 'Нет на приёмке': 'Немає на прийманні', 'Вернуть в работу': 'Повернути в роботу',
+  'Комментарий': 'Коментар', 'Товар отмечен снятым': 'Товар позначено знятим', 'Отмечено: нет на приёмке': 'Позначено: немає на прийманні',
+  'Товар возвращён в работу': 'Товар повернуто в роботу', 'Фото загружено': 'Фото завантажено',
+  'снят': 'знято', 'не снят': 'не знято', 'снимается': 'знімається', 'нет на приёмке': 'немає на прийманні', 'низкое разрешение': 'низька роздільність',
+  'первое — этикетка коробки': 'перше — етикетка коробки',
+  'белый фон и засветка делаются автоматически через несколько секунд после загрузки': 'білий фон і засвітлення робляться автоматично за кілька секунд після завантаження',
+  // ── пользователи ──
+  'Учётные записи создаёт администратор. Фотограф входит в приложение один раз, дальше без пароля. ★ — фотограф по умолчанию для новых заданий.':
+    'Облікові записи створює адміністратор. Фотограф входить у застосунок один раз, далі без пароля. ★ — фотограф за замовчуванням для нових завдань.',
+  'Имя и логин': 'Ім’я та логін', 'Роль': 'Роль', 'Последний вход': 'Останній вхід', 'активен': 'активний', 'заблокирован': 'заблоковано',
+  'подбор пароля — пауза 15 мин': 'підбір пароля — пауза 15 хв', 'ещё не входил': 'ще не входив',
+  'Снять паузу': 'Зняти паузу', 'По умолчанию': 'За замовчуванням', 'Выйти везде': 'Вийти всюди',
+  'Заблокировать': 'Заблокувати', 'Разблокировать': 'Розблокувати', '🔔 Проверить push': '🔔 Перевірити push',
+  'Пробное уведомление только этому фотографу': 'Пробне сповіщення лише цьому фотографу',
+  'Фотограф по умолчанию: подставляется в новые задания': 'Фотограф за замовчуванням: підставляється в нові завдання',
+  'Новый пользователь': 'Новий користувач', 'латиница, например melnik': 'латиниця, наприклад melnik', 'Временный пароль': 'Тимчасовий пароль',
+  'Свою роль меняет другой администратор.': 'Свою роль змінює інший адміністратор.',
+  'При смене роли сотрудника выкинет со всех устройств: войти нужно будет заново, уже в своё приложение.':
+    'Після зміни ролі працівника буде виведено з усіх пристроїв: увійти потрібно буде знову, уже у свій застосунок.',
+  'Сменить пароль': 'Змінити пароль', 'Ваш текущий вход сохранится.': 'Ваш поточний вхід збережеться.',
+  'Сотрудника выкинет со всех устройств, войти нужно будет с новым паролем.': 'Працівника буде виведено з усіх пристроїв, увійти потрібно буде з новим паролем.',
+  'логин': 'логін', 'пароль': 'пароль', 'Пароль показывается один раз.': 'Пароль показується один раз.',
+  'Не доставлено': 'Не доставлено',
+  'У фотографа не включены уведомления: попросите нажать «Включить уведомления» в приложении':
+    'У фотографа не ввімкнені сповіщення: попросіть натиснути «Увімкнути сповіщення» в застосунку',
+  // ── итоговый Excel (мои колонки; колонки шаблона не переводятся) ──
+  '№ фото': '№ фото', 'Имя файла': 'Назва файлу', 'Ширина': 'Ширина', 'Высота': 'Висота', 'Размер, МБ': 'Розмір, МБ',
+  'задание': 'завдання', 'итог': 'підсумок'
+};
+
+// Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
+const I18N_RX = [
+  [/^(\d+) (товар|товара|товаров)$/, (m, pl) => `${m[1]} ${pl(+m[1], 'товар', 'товари', 'товарів')}`],
+  [/^(\d+) в очереди$/, m => `${m[1]} у черзі`],
+  [/^в очереди (\d+)$/, m => `у черзі ${m[1]}`],
+  [/^(\d+) мало фото$/, m => `${m[1]} мало фото`],
+  [/^(\d+) нет на приёмке$/, m => `${m[1]} немає на прийманні`],
+  [/^Нет на приёмке (\d+)$/, m => `Немає на прийманні ${m[1]}`],
+  [/^нет на приёмке (\d+)$/, m => `немає на прийманні ${m[1]}`],
+  [/^(\d+) фото$/, m => `${m[1]} фото`],
+  [/^больше (\d+) фото$/, m => `понад ${m[1]} фото`],
+  [/^([\d.,]+) Мп$/, m => `${m[1]} Мп`],
+  [/^([\d.,]+) МБ$/, m => `${m[1]} МБ`],
+  [/^код 1С (.+)$/, m => `код 1С ${m[1]}`],
+  [/^создано (.+)$/, m => `створено ${m[1]}`],
+  [/^снято (\d+) из (\d+)$/, m => `знято ${m[1]} з ${m[2]}`],
+  [/^Снято (\d+) из минимум (\d+)\.$/, m => `Знято ${m[1]} з мінімум ${m[2]}.`],
+  [/^Фото меньше (\d+) — укажите причину в комментарии$/, m => `Фото менше ${m[1]} — вкажіть причину в коментарі`],
+  [/^минимум (\d+), максимум (\d+)$/, m => `мінімум ${m[1]}, максимум ${m[2]}`],
+  [/^Все (\d+)$/, m => `Усі ${m[1]}`],
+  [/^Не сняты (\d+)$/, m => `Не знято ${m[1]}`],
+  [/^Сняты (\d+)$/, m => `Знято ${m[1]}`],
+  [/^С замечаниями (\d+)$/, m => `Із зауваженнями ${m[1]}`],
+  [/^С флагами (\d+)$/, m => `З прапорцями ${m[1]}`],
+  [/^Excel готов: снято (\d+) из (\d+)$/, m => `Excel готовий: знято ${m[1]} з ${m[2]}`],
+  [/^Доставлено: (\d+) из (\d+)$/, m => `Доставлено: ${m[1]} з ${m[2]}`],
+  [/^Не доставлено: (.+)$/, m => `Не доставлено: ${m[1]}`],
+  [/^Задание передано: (.+)$/, m => `Завдання передано: ${m[1]}`],
+  [/^Задание создано: (\d+) (товар|товара|товаров)$/, (m, pl) => `Завдання створено: ${m[1]} ${pl(+m[1], 'товар', 'товари', 'товарів')}`],
+  [/^Изменить: (.+)$/, m => `Змінити: ${m[1]}`],
+  [/^Новый пароль: (.+)$/, m => `Новий пароль: ${m[1]}`],
+  [/^Передайте (.+):$/, m => `Передайте ${m[1]}:`],
+  [/^Открыть фото (.+)$/, m => `Відкрити фото ${m[1]}`],
+  [/^(.+) \(заблокирован\)$/, m => `${m[1]} (заблоковано)`],
+  [/^· (администратор|менеджер|фотограф)$/, m => '· ' + ({ администратор: 'адміністратор', менеджер: 'менеджер', фотограф: 'фотограф' })[m[1]]],
+  [/^Пароль показывается один раз\. Фотограф входит в приложение на телефоне: (.+)$/, m => `Пароль показується один раз. Фотограф входить у застосунок на телефоні: ${m[1]}`],
+  [/^Пароль показывается один раз\. Вход в админку: (.+)$/, m => `Пароль показується один раз. Вхід до адмінки: ${m[1]}`],
+  [/^Ошибка сервера: (\d+)$/, m => `Помилка сервера: ${m[1]}`],
+  [/^дубль кода 1С \(строка (\d+)\)$/, m => `дубль коду 1С (рядок ${m[1]})`],
+  [/^дубль артикула \(строка (\d+)\)$/, m => `дубль артикула (рядок ${m[1]})`],
+  [/^Выкинуть (.+) со всех устройств\? Войти можно будет снова с тем же паролем\.$/, m => `Вивести ${m[1]} з усіх пристроїв? Увійти можна буде знову з тим самим паролем.`],
+  [/^Заблокировать (.+)\? Сотрудника сразу выкинет со всех устройств, войти он не сможет\.$/, m => `Заблокувати ${m[1]}? Працівника одразу буде виведено з усіх пристроїв, увійти він не зможе.`],
+  [/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\. или попросите администратора разблокировать$/, m => `Забагато невдалих спроб. Спробуйте через ${m[1]} хв або попросіть адміністратора розблокувати`],
+  [/^Логин «(.+)» уже занят$/, m => `Логін «${m[1]}» уже зайнятий`],
+  [/^Нет кода 1С или артикула в строках: (.+)$/, m => `Немає коду 1С або артикула в рядках: ${m[1]}`],
+  [/^Фото больше (\d+) МБ$/, m => `Фото більше ${m[1]} МБ`],
+  [/^Фото: только JPEG или PNG, получено (.+)$/, m => `Фото: лише JPEG або PNG, отримано ${m[1]}`],
+  [/^Приёмка (\d{2}\.\d{2}\.\d{4})$/, m => `Приймання ${m[1]}`],
+  [/^Поток с приёмки (\d{2}\.\d{2}\.\d{4})$/, m => `Потік із приймання ${m[1]}`]
+];
+
+// ─── Язык интерфейса: украинский / русский ───────────────
+// Экраны написаны по-русски, логика не трогается. Этот модуль после каждой отрисовки
+// подменяет русские надписи украинскими по словарю (I18N_UK) и правилам с числами (I18N_RX).
+// Данные (названия товаров, артикулы, имена) не переводятся: их нет в словаре.
+// Выбор языка: профиль пользователя (сервер), до входа — последний выбор на этом устройстве.
+const I18N = (() => {
+  const KEY = 'zf_lang';
+  let lang = 'uk';
+  try { lang = localStorage.getItem(KEY) === 'ru' ? 'ru' : 'uk'; } catch (_) {}
+  const ATTRS = ['title', 'aria-label', 'placeholder', 'alt'];
+  const SKIP = 'script,style,textarea,.mono,[data-noi18n]';
+  const misses = new Set();                    // для проверки: русский текст без перевода
+
+  const plUk = (n, a, b, c) => { n = Math.abs(n) % 100; const d = n % 10; if (n > 10 && n < 20) return c; if (d > 1 && d < 5) return b; if (d === 1) return a; return c; };
+  function one(s) {
+    if (Object.prototype.hasOwnProperty.call(I18N_UK, s)) return I18N_UK[s];
+    for (const [re, fn] of I18N_RX) { const m = s.match(re); if (m) return fn(m, plUk); }
+    return null;
+  }
+  // перевод одной строки: целиком, иначе по частям через « · », иначе как есть
+  function tr(s) {
+    if (s == null) return s;
+    const str = String(s);
+    if (!/[А-Яа-яЁё]/.test(str)) return str;
+    const lead = str.match(/^\s*/)[0], tail = str.match(/\s*$/)[0];
+    const core = str.trim();
+    let out = one(core);
+    if (out === null && core.includes(' · ')) {
+      let hit = false;
+      const parts = core.split(' · ').map(p => { const t = one(p.trim()); if (t !== null) hit = true; return t === null ? p : t; });
+      if (hit) out = parts.join(' · ');
+    }
+    if (out === null) { misses.add(core); return str; }
+    return lead + out + tail;
+  }
+  const t = s => lang === 'uk' ? tr(s) : s;
+
+  // ── применение к странице ──
+  function textNode(n) {
+    if (!n.parentElement || n.parentElement.closest(SKIP)) return;
+    if (n.__tr !== undefined && n.nodeValue === n.__tr) { /* наш перевод — источник прежний */ }
+    else n.__ru = n.nodeValue;
+    const want = lang === 'uk' ? tr(n.__ru) : n.__ru;
+    n.__tr = want;
+    if (n.nodeValue !== want) n.nodeValue = want;
+  }
+  function element(el) {
+    if (el.closest && el.closest(SKIP)) return;
+    el.__ruA = el.__ruA || {};
+    for (const a of ATTRS) {
+      if (!el.hasAttribute(a)) continue;
+      const v = el.getAttribute(a);
+      if (!(el.__trA && el.__trA[a] === v)) el.__ruA[a] = v;
+      const want = lang === 'uk' ? tr(el.__ruA[a]) : el.__ruA[a];
+      (el.__trA = el.__trA || {})[a] = want;
+      if (v !== want) el.setAttribute(a, want);
+    }
+  }
+  function walk(root) {
+    if (root.nodeType === 3) return textNode(root);
+    if (root.nodeType !== 1) return;
+    if (root.matches && root.matches('script,style')) return;
+    element(root);
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    let n; while ((n = w.nextNode())) { if (n.nodeType === 3) { if (/\S/.test(n.nodeValue)) textNode(n); } else element(n); }
+  }
+  let busy = false;
+  const mo = new MutationObserver(list => {
+    if (busy) return; busy = true;
+    try {
+      for (const m of list) {
+        if (m.type === 'characterData') textNode(m.target);
+        else if (m.type === 'attributes') element(m.target);
+        else m.addedNodes.forEach(walk);
+      }
+    } finally { mo.takeRecords(); busy = false; }
+  });
+  function start() {
+    document.documentElement.lang = lang;
+    walk(document.documentElement);
+    mo.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    drawSwitches();
+  }
+  // окна подтверждения тоже на нужном языке
+  const _confirm = window.confirm.bind(window), _alert = window.alert.bind(window);
+  window.confirm = m => _confirm(t(m));
+  window.alert = m => _alert(t(m));
+
+  // ── переключатель «УКР / РУС» ──
+  const listeners = [];
+  function drawSwitches() {
+    document.querySelectorAll('[data-lang-switch]').forEach(box => {
+      box.innerHTML = ['uk', 'ru'].map(l => `<button type="button" data-l="${l}" class="${l === lang ? 'on' : ''}" aria-pressed="${l === lang}">${l === 'uk' ? 'УКР' : 'РУС'}</button>`).join('');
+      box.querySelectorAll('[data-l]').forEach(b => b.onclick = () => set(b.dataset.l, true));
+    });
+  }
+  function set(l, byUser) {
+    l = l === 'ru' ? 'ru' : 'uk';
+    const changed = l !== lang;
+    lang = l;
+    try { localStorage.setItem(KEY, l); } catch (_) {}
+    document.documentElement.lang = l;
+    busy = true;
+    try { walk(document.documentElement); } finally { mo.takeRecords(); busy = false; }
+    drawSwitches();
+    if (changed || byUser) listeners.forEach(fn => { try { fn(l, byUser); } catch (_) {} });
+  }
+  return {
+    get lang() { return lang; },
+    locale() { return lang === 'uk' ? 'uk-UA' : 'ru-RU'; },
+    t, tr, set, start, misses,
+    onChange(fn) { listeners.push(fn); },
+    drawSwitches
+  };
+})();
+
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -270,7 +561,7 @@ function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2600);
 }
-function todayTitle() { return 'Приёмка ' + new Date().toLocaleDateString('ru-RU'); }
+function todayTitle() { return I18N.t('Приёмка') + ' ' + new Date().toLocaleDateString('ru-RU'); }
 
 function itemFlags(it) {
   const f = [];
@@ -321,7 +612,7 @@ async function viewTasks() {
   const sum = (arr, k) => arr.reduce((s, t) => s + num(t[k]), 0);
   view.innerHTML = `
     <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
-      <div class="bar"><button class="btn" type="button" id="push-test" title="Отправить пробное уведомление на телефоны фотографов">🔔 Проверить push</button><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
+      <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
     <div class="kpi">
       <div>Товаров в работе<b>${sum(open, 'items_total')}</b></div>
       <div class="ok">Снято товаров<b>${sum(open, 'items_done')}</b></div>
@@ -347,19 +638,7 @@ async function viewTasks() {
       }).join('')}</tbody></table></div>`
       : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}`;
   $('#refresh').onclick = viewTasks;
-  $('#push-test').onclick = pushTest;
   bindRowLinks();
-}
-// Пробное уведомление на все телефоны, где фотограф включил уведомления
-async function pushTest() {
-  const b = $('#push-test'); b.disabled = true;
-  try {
-    const r = await api('/photo/push/send', { method: 'POST', body: {
-      title: 'Проверка уведомлений', body: 'Связь с телефоном работает. ' + new Date().toLocaleTimeString('ru-RU'), url: '#tasks', tag: 'test' } });
-    if (!num(r.devices)) toast('Нет телефонов с включёнными уведомлениями');
-    else toast('Отправлено: ' + num(r.sent) + ' из ' + num(r.devices) + (r.errors && r.errors.length ? ' · ошибка: ' + r.errors[0] : ''));
-  } catch (e) { toast(e.message); }
-  b.disabled = false;
 }
 function bindRowLinks() {
   view.querySelectorAll('tr[data-href]').forEach(tr => {
@@ -682,8 +961,8 @@ async function viewItem(taskId, itemId) {
 // Лист «Задание» — колонки исходного шаблона в том же порядке; вместо ручных диапазонов кадров
 // пишем то, что знает система: имя первого фото и номера первого и последнего фото товара.
 // Лист «Фото» — каждое фото отдельной строкой со ссылками.
-const XLS_STATUS = it => it.status === 'done' ? 'снят' : it.status === 'absent' ? 'нет на приёмке'
-  : num(it.photos_stored) ? 'снимается' : 'не снят';
+const XLS_STATUS = it => I18N.t(it.status === 'done' ? 'снят' : it.status === 'absent' ? 'нет на приёмке'
+  : num(it.photos_stored) ? 'снимается' : 'не снят');
 function exportTaskXlsx(d) {
   const t = d.task, items = (d.items || []).slice()
     .sort((a, b) => (a.row_no == null ? 1e9 : num(a.row_no)) - (b.row_no == null ? 1e9 : num(b.row_no)) || num(a.id) - num(b.id));
@@ -691,7 +970,7 @@ function exportTaskXlsx(d) {
     .sort((a, b) => num(a.photo_index) - num(b.photo_index));
   const H = ['№ з/п', 'Код1С8', 'Номенклатура', 'Осн. комірка', 'Артикул', 'Бренд', 'Од. вим.', 'В наявності',
     'Файл картинки', 'Нач знач', 'Кон знач', 'Кол-во фото', 'Проверка пересечения диапазонов',
-    'Проверка последов-сти номеров', 'Проверка кол-ва фото', 'Проверка дублей код1С', 'Статус', 'Комментарий'];
+    'Проверка последов-сти номеров', 'Проверка кол-ва фото', 'Проверка дублей код1С', I18N.t('Статус'), I18N.t('Комментарий')];
   const n = items.length, last = n + 1;
   const codeCount = {};
   items.forEach(it => { codeCount[it.code_1c] = (codeCount[it.code_1c] || 0) + 1; });
@@ -716,7 +995,7 @@ function exportTaskXlsx(d) {
   ws['!cols'] = [6, 14, 48, 12, 16, 12, 8, 10, 30, 9, 9, 10, 14, 14, 16, 14, 15, 30].map(w => ({ wch: w }));
   ws['!autofilter'] = { ref: 'A1:R' + Math.max(last, 1) };
 
-  const P = [['№ з/п', 'Код1С8', 'Артикул', 'Бренд', '№ фото', 'Имя файла', 'Оригинал', 'Белый фон', 'Засветка', 'Ширина', 'Высота', 'Размер, МБ', 'Снято']];
+  const P = [['№ з/п', 'Код1С8', 'Артикул', 'Бренд', ...['№ фото', 'Имя файла', 'Оригинал', 'Белый фон', 'Засветка', 'Ширина', 'Высота', 'Размер, МБ', 'Снято'].map(I18N.t)]];
   items.forEach(it => stored(it).forEach(p => P.push([
     it.row_no == null ? '' : num(it.row_no), it.code_1c || '', it.article || '', it.brand || '', num(p.photo_index), p.file_name,
     p.file_url, webUrl(p.file_url), lightUrl(p.file_url), num(p.width) || '', num(p.height) || '',
@@ -727,10 +1006,10 @@ function exportTaskXlsx(d) {
   wp['!cols'] = [6, 14, 16, 12, 7, 30, 40, 40, 40, 8, 8, 10, 18].map(w => ({ wch: w }));
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Задание');
-  XLSX.utils.book_append_sheet(wb, wp, 'Фото');
-  const base = String(t.title || 'задание').replace(/[\\/:*?"<>|]+/g, '_').trim().slice(0, 80);
-  XLSX.writeFile(wb, base + ' — итог.xlsx');
+  XLSX.utils.book_append_sheet(wb, ws, I18N.t('Задание'));
+  XLSX.utils.book_append_sheet(wb, wp, I18N.t('Фото'));
+  const base = String(t.title || I18N.t('задание')).replace(/[\\/:*?"<>|]+/g, '_').trim().slice(0, 80);
+  XLSX.writeFile(wb, base + ' — ' + I18N.t('итог') + '.xlsx');
   const done = items.filter(i => i.status === 'done').length;
   toast('Excel готов: снято ' + done + ' из ' + n);
 }
@@ -748,7 +1027,7 @@ function phOptions(list, selected) {
 // ─── Вход в админку ──────────────────────────────────────
 const ROLE_RU = { admin: 'администратор', manager: 'менеджер', photographer: 'фотограф' };
 const PWA_URL = 'https://zenith-to.onrender.com/paw/';
-const authBrand = `<div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.фото</span></b></div>`;
+const authBrand = `<span class="lsw" data-lang-switch></span><div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.фото</span></b></div>`;
 function drawWho() {
   const u = Auth.user;
   $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
@@ -759,6 +1038,7 @@ function showLogin(msg) {
   document.title = 'Вход в админку — Зеніт-Авто.фото';
   const box = $('#auth');
   box.innerHTML = `<div class="auth-card">${authBrand}<div class="loading" style="padding:20px 0">Проверяю…</div></div>`;
+  I18N.drawSwitches();
   api('/photo/auth/status', { auth: false })
     .then(d => d.has_users ? drawLoginForm(msg) : drawSetupForm())
     .catch(e => { box.innerHTML = `<div class="auth-card">${authBrand}<div class="err">${esc(e.message)}</div><button class="btn" type="button" id="auth-retry">Повторить</button></div>`; $('#auth-retry').onclick = () => showLogin(msg); });
@@ -775,6 +1055,7 @@ function drawLoginForm(msg) {
     <div id="al-err"></div>
     <div class="foot">Фотограф? Вам сюда не нужно: войдите в приложение на телефоне — <a href="${PWA_URL}">${PWA_URL.replace('https://', '')}</a></div>
   </form>`;
+  I18N.drawSwitches();
   if (msg) $('#al-err').innerHTML = '<div class="note">' + esc(msg) + '</div>';
   const f = $('#admin-login-form');
   f.onsubmit = async e => {
@@ -784,7 +1065,7 @@ function drawLoginForm(msg) {
     const b = $('#al-go'); b.disabled = true; b.textContent = 'Входим…';
     try {
       const d = await api('/photo/auth/login', { method: 'POST', auth: false, body: { login, password, scope: 'admin', device: navigator.userAgent.slice(0, 120) } });
-      Auth.save(d.token, d.user); enterApp();
+      Auth.save(d.token, d.user); applyProfileLang(); enterApp();
     } catch (err) {
       $('#al-err').innerHTML = '<div class="err">' + esc(err.message) + (err.data && err.data.wrong_app ? `<br><a href="${PWA_URL}">Открыть приложение фотографа</a>` : '') + '</div>';
       b.disabled = false; b.textContent = 'Войти в админку';
@@ -805,6 +1086,7 @@ function drawSetupForm() {
     <button class="btn pri" type="submit" id="as-go">Создать и войти</button>
     <div id="as-err"></div>
   </form>`;
+  I18N.drawSwitches();
   $('#admin-setup-form').onsubmit = async e => {
     e.preventDefault();
     const full_name = $('#as-name').value.trim(), login = $('#as-login').value.trim().toLowerCase(), password = $('#as-pass').value;
@@ -813,11 +1095,27 @@ function drawSetupForm() {
     const b = $('#as-go'); b.disabled = true;
     try {
       const d = await api('/photo/auth/setup', { method: 'POST', auth: false, body: { full_name, login, password } });
-      Auth.save(d.token, d.user); enterApp(); toast('Администратор создан');
+      Auth.save(d.token, d.user); applyProfileLang(); enterApp(); toast('Администратор создан');
     } catch (ex) { err(ex.message); b.disabled = false; }
   };
   $('#as-name').focus();
 }
+// Язык: выбранный до входа на этом устройстве переносится в профиль, иначе берётся из профиля
+let langPickedBeforeLogin = false;
+function applyProfileLang() {
+  const u = Auth.user; if (!u) return;
+  if (langPickedBeforeLogin) { langPickedBeforeLogin = false; if (u.lang !== I18N.lang) saveLang(I18N.lang); return; }
+  if (u.lang && u.lang !== I18N.lang) I18N.set(u.lang);
+}
+async function saveLang(l) {
+  try { const r = await api('/photo/auth/lang', { method: 'POST', body: { lang: l } }); if (r.user) Auth.save(Auth.token, r.user); }
+  catch (e) { toast(e.message); }
+}
+I18N.onChange((l, byUser) => {
+  if (!byUser) return;
+  if (!Auth.token) { langPickedBeforeLogin = true; return; }
+  saveLang(l);
+});
 function enterApp() {
   document.body.classList.remove('need-auth');
   document.title = 'Зеніт-Авто.фото — админка';
@@ -837,7 +1135,7 @@ async function boot() {
   drawWho();
   try {
     const d = await api('/photo/auth/me?scope=admin');
-    Auth.save(Auth.token, d.user); enterApp();
+    Auth.save(Auth.token, d.user); applyProfileLang(); enterApp();
   } catch (e) {
     if (!Auth.token) return;                       // 401 уже показал вход
     if (e.status === 403) { Auth.clear(); return showLogin(e.message); }
@@ -899,6 +1197,7 @@ async function viewUsers() {
     acts.push(`<button class="btn sm" data-u="reset" data-id="${u.id}">Пароль</button>`);
     if (u.locked) acts.push(`<button class="btn sm" data-u="unlock" data-id="${u.id}">Снять паузу</button>`);
     if (u.role === 'photographer' && u.is_active && u.id !== defaultId) acts.push(`<button class="btn sm" data-u="default" data-id="${u.id}">По умолчанию</button>`);
+    if (u.role === 'photographer' && u.is_active) acts.push(`<button class="btn sm" data-u="push" data-id="${u.id}" title="Пробное уведомление только этому фотографу">🔔 Проверить push</button>`);
     if (num(u.sessions) && !self) acts.push(`<button class="btn sm" data-u="logout_all" data-id="${u.id}">Выйти везде</button>`);
     if (!self) acts.push(u.is_active ? `<button class="btn sm" data-u="block" data-id="${u.id}">Заблокировать</button>` : `<button class="btn sm" data-u="unblock" data-id="${u.id}">Разблокировать</button>`);
     const seen = u.role === 'photographer'
@@ -922,7 +1221,7 @@ async function viewUsers() {
   const redraw = () => viewUsers();
   $('#u-add').onclick = () => { usersPanel = { kind: 'create' }; usersCreds = null; redraw(); };
   if ($('#u-copy')) $('#u-copy').onclick = () => {
-    const t = 'Логин: ' + usersCreds.login + '\nПароль: ' + usersCreds.password + '\n' + (usersCreds.role === 'photographer' ? PWA_URL : location.origin + location.pathname);
+    const t = I18N.t('Логин') + ': ' + usersCreds.login + '\n' + I18N.t('Пароль') + ': ' + usersCreds.password + '\n' + (usersCreds.role === 'photographer' ? PWA_URL : location.origin + location.pathname);
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Скопировано'), () => toast('Скопируйте вручную'));
   };
   if ($('#u-cancel')) $('#u-cancel').onclick = () => { usersPanel = null; redraw(); };
@@ -952,6 +1251,16 @@ async function viewUsers() {
   view.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => {
     const id = num(b.dataset.id), u = users.find(x => x.id === id), k = b.dataset.u;
     if (k === 'edit' || k === 'reset') { usersPanel = { kind: k, id }; usersCreds = null; return redraw(); }
+    if (k === 'push') {
+      b.disabled = true;
+      try {
+        const r = await api('/photo/push/send', { method: 'POST', body: { user_id: id, kind: 'test', url: '#tasks', tag: 'test' } });
+        if (!num(r.devices)) toast('У фотографа не включены уведомления: попросите нажать «Включить уведомления» в приложении');
+        else if (num(r.sent)) toast('Доставлено: ' + num(r.sent) + ' из ' + num(r.devices));
+        else toast('Не доставлено' + (r.errors && r.errors.length ? ': ' + r.errors[0] : ''));
+      } catch (ex) { toast(ex.message); }
+      b.disabled = false; return;
+    }
     const map = {
       unlock: ['unlock', {}, null],
       default: ['set_default', {}, null],
@@ -994,6 +1303,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
 });
 
+I18N.start();
 boot();
 </script>
 </body>
