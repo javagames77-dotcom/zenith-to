@@ -168,7 +168,11 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--or-soft); border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; }
 .inav { display: flex; gap: 8px; align-items: center; }
 .top .gs { width: 260px; min-height: 32px; font-size: 13px; }
+.intake-hd.st-wa { border-color: var(--wa); background: var(--wa-soft, #fff7e6); }
+.intake-hd.st-ok { border-color: var(--ok); background: var(--ok-soft, #eefaf1); }
+.intake-hd .ih-st { margin-top: 4px; }
 .intake-hd { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.ig textarea.in { width: 100%; min-height: 54px; padding: 6px 8px; font: inherit; font-size: 13px; resize: vertical; }
 .ig input.in { min-width: 90px; width: 100%; padding: 6px 8px; min-height: 34px; font-size: 13px; }
 .ig input.in.mono { font-family: "PT Mono", ui-monospace, monospace; }
 .ig input.in:disabled { background: transparent; border-color: transparent; color: var(--tx); }
@@ -425,7 +429,11 @@ const I18N_UK = {
   'Модель читает этикетки… это может занять минуту': 'Модель читає етикетки… це може зайняти хвилину',
   'Артикул есть в тексте': 'Артикул є в тексті', 'Артикул прочитан верно': 'Артикул прочитано правильно', 'Бренд верно': 'Бренд правильно',
   'Название прочитано': 'Назву прочитано', 'Не читается / ошибки': 'Не читається / помилки', 'Должно быть': 'Має бути', 'Прочитано': 'Прочитано',
-  'да': 'так', 'нет': 'ні', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'да': 'так', 'нет': 'ні',
+  // ── состояние проверки (a10) ──
+  'Ждут проверки': 'Чекають перевірки', 'проверено': 'перевірено', 'не проверено': 'не перевірено', 'фотограф ещё снимает': 'фотограф ще знімає',
+  'Данные для 1С проверены': 'Дані для 1С перевірено', 'Требуется проверка данных для 1С': 'Потрібна перевірка даних для 1С', 'товаров пока нет': 'товарів поки немає',
+  'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
@@ -478,6 +486,9 @@ const I18N_RX = [
   [/^Фото: только JPEG или PNG, получено (.+)$/, m => `Фото: лише JPEG або PNG, отримано ${m[1]}`],
   [/^версия (.+)$/, m => `версія ${m[1]}`],
   [/^передано завскладу (.+)$/, m => `передано завскладу ${m[1]}`],
+  [/^проверить для 1С · (\d+)$/, m => `перевірити для 1С · ${m[1]}`],
+  [/^Не проверено для 1С товаров: (\d+)\. Всё равно закрыть\?$/, m => `Не перевірено для 1С товарів: ${m[1]}. Усе одно закрити?`],
+  [/^Нет кода 1С \(стоит временный (.+)\)\. Всё равно отметить проверенным\?$/, m => `Немає коду 1С (стоїть тимчасовий ${m[1]}). Усе одно позначити перевіреним?`],
   [/^передано (.+)$/, m => `передано ${m[1]}`],
   [/^проверено (\d+) из (\d+)$/, m => `перевірено ${m[1]} з ${m[2]}`],
   [/^Приёмка товара (.+)$/, m => `Приймання товару ${m[1]}`],
@@ -610,7 +621,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a9';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a10';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -723,8 +734,15 @@ function showError(e, retry) {
 // ─── Задания ──────────────────────────────────────────────
 // фильтры списка заданий (период — по дате создания); список приходит страницами по PAGE
 const tasksF = { status: 'open', period: 'all', from: '', to: '', user_id: '', q: '', offset: 0 };
-const TASK_STATUSES = [['open', 'В работе'], ['closed', 'Закрытые'], ['', 'Все']];
+const TASK_STATUSES = [['open', 'В работе'], ['review', 'Ждут проверки'], ['closed', 'Закрытые'], ['', 'Все']];
 let tasksReq = 0;
+const isTmpCode = c => /^NEW-/i.test(c || '');
+// приёмка: total — товаров, ver — проверено завскладом, finished — фотограф передал
+function intakeState(total, ver, finished) {
+  if (total && ver >= total) return ['ok', 'проверено'];
+  if (finished || ver) return ['wa', 'проверить для 1С · ' + (total - ver)];
+  return ['bl', 'идёт приёмка'];
+}
 const tasksSort = { key: '', dir: 'desc' };   // created | activity | progress | photos; пусто — новые сверху
 async function viewTasks() {
   navOn('tasks');
@@ -807,7 +825,7 @@ async function loadTasksList() {
         if (num(t.items_absent)) flags.push(`<span class="pill">${t.items_absent} нет на приёмке</span>`);
         if (num(t.photos_pending)) flags.push(`<span class="pill wa">${t.photos_pending} в очереди</span>`);
         return `<tr class="click" data-href="#task-${num(t.id)}" tabindex="0">
-          <td><b>${esc(t.title)}</b>${t.source === 'intake' ? ' <span class="pill wa">приёмка</span>' : ''}<div class="mu">${esc(t.file_name || 'без файла')} · ${fmtDate(t.created_at)}</div></td>
+          <td><b>${esc(t.title)}</b>${t.source === 'intake' ? (st => ` <span class="pill ${st[0]}">${esc(st[1])}</span>`)(intakeState(num(t.items_total), num(t.items_verified), t.finished_at)) : ''}<div class="mu">${esc(t.file_name || 'без файла')} · ${fmtDate(t.created_at)}</div></td>
           <td class="nw">${esc(t.photographer || '—')}</td>
           <td class="nw"><span class="prog"><i style="width:${pct}%"></i></span> ${done} / ${total}</td>
           <td class="nw">${num(t.photos_stored)}</td>
@@ -1043,6 +1061,15 @@ async function viewTask(id) {
   let d;
   try { d = await loadTask(id); } catch (e) { return showError(e, () => viewTask(id)); }
   const t = d.task, items = d.items || [];
+  // приёмка: кто и что проверил — отдельным запросом (в данных задания этого нет)
+  let ver = {}, verLast = null;
+  if (t.source === 'intake') {
+    try {
+      const x = await api('/photo/admin/intake?task_id=' + num(id));
+      (x.items || []).forEach(i => { if (i.verified_at) { ver[num(i.id)] = i; if (!verLast || i.verified_at > verLast.verified_at) verLast = i; } });
+    } catch (_) {}
+  }
+  const nVer = Object.keys(ver).length, ist = intakeState(items.length, nVer, t.finished_at);
   const done = items.filter(i => i.status === 'done').length;
   const absent = items.filter(i => i.status === 'absent').length;
   const todo = items.filter(i => i.status === 'todo').length;
@@ -1052,9 +1079,11 @@ async function viewTask(id) {
     <div class="crumb"><a href="#tasks">← Задания</a></div>
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}</div></div>
       <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
-    ${t.source === 'intake' ? `<div class="card intake-hd"><div><b>Приёмка товара</b> · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand || '—')}</b> ·
-        ${t.finished_at ? `<span class="pill ok">передано завскладу ${fmtDate(t.finished_at)}</span>` : '<span class="pill bl">идёт приёмка</span>'}</div>
-        <a class="btn pri" href="#intake-${num(t.id)}">Проверка данных для 1С</a></div>` : ''}
+    ${t.source === 'intake' ? `<div class="card intake-hd st-${ist[0]}"><div><b>Приёмка товара</b>${t.intake_brand ? ` · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand)}</b>` : ''} ·
+        ${t.finished_at ? `<span>передано завскладу ${fmtDate(t.finished_at)}</span>` : '<span>фотограф ещё снимает</span>'}
+        <div class="ih-st">${ist[0] === 'ok' ? `<b>Данные для 1С проверены</b>${verLast ? ` · <span data-noi18n>${esc(verLast.verified_by || '')}</span>, ${fmtDate(verLast.verified_at)}` : ''}`
+          : items.length ? `<b>Требуется проверка данных для 1С</b> · <span>проверено ${nVer} из ${items.length}</span>` : '<span>товаров пока нет</span>'}</div></div>
+        <a class="btn${ist[0] === 'ok' ? '' : ' pri'}" href="#intake-${num(t.id)}">${ist[0] === 'ok' ? 'Открыть проверку' : 'Проверить данные'}</a></div>` : ''}
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
     <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам">
       <label class="mu" for="t-sort">Порядок</label><select class="in" id="t-sort">${TASK_SORTS.map(([k, l]) => `<option value="${k}"${k === taskSort ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
@@ -1093,7 +1122,7 @@ async function viewTask(id) {
         <td class="mono nw">${esc(i.cell) || '<span class="mu">—</span>'}</td>
         <td>${esc(i.name || '')}</td>
         <td class="nw">${ph.length ? `<span class="thumbs">${th}${ph.length > 5 ? '<em>+' + (ph.length - 5) + '</em>' : ''}</span>` : '<span class="mu">—</span>'}</td>
-        <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</td></tr>`;
+        <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}${t.source === 'intake' ? (ver[num(i.id)] ? ' <span class="pill ok">проверено</span>' : ' <span class="pill wa">не проверено</span>') : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="7" class="empty">Ничего не найдено</td></tr>';
     bindRowLinks();
     body.querySelectorAll('[data-ck]').forEach(c => c.onchange = () => { const k = num(c.dataset.ck); c.checked ? picked.add(k) : picked.delete(k); drawBulk(); });
@@ -1122,7 +1151,9 @@ async function viewTask(id) {
   $('#refresh').onclick = () => viewTask(id);
   $('#t-close').onclick = async () => {
     const close = t.status !== 'closed';
+    const unver = t.source === 'intake' ? items.length - nVer : 0;
     const ask = !close ? 'Открыть задание снова? Оно вернётся фотографу.'
+      : unver ? 'Не проверено для 1С товаров: ' + unver + '. Всё равно закрыть?'
       : todo ? 'Не снято товаров: ' + todo + '. Всё равно закрыть? Задание пропадёт у фотографа.'
       : 'Закрыть задание? Оно пропадёт у фотографа и уйдёт в закрытые.';
     if (!confirm(ask)) return;
@@ -1725,7 +1756,7 @@ function aiNote(i, f) {
   if (f === 'name') return (a.name && a.name_source === 'label' ? o('<span>с этикетки</span>') : '') + (a.oem ? o(`<span>номер производителя</span> <b class="mono">${esc(a.oem)}</b>`) : '');
   return '';
 }
-const isTmpCode = c => /^NEW-/i.test(c || '');
+
 async function viewIntake(id) {
   navOn('tasks'); loading();
   let d;
@@ -1735,7 +1766,7 @@ async function viewIntake(id) {
   view.innerHTML = `
     <div class="crumb"><a href="#task-${num(t.id)}">← ${esc(t.title)}</a></div>
     <div class="hd"><div><h1>Проверка данных приёмки</h1>
-      <div class="sub"><span>Фотограф</span> <span data-noi18n>${esc(t.photographer || '—')}</span> · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand || '—')}</b> · <span>${t.finished_at ? 'передано ' + fmtDate(t.finished_at) : 'идёт приёмка'}</span></div></div>
+      <div class="sub"><span>Фотограф</span> <span data-noi18n>${esc(t.photographer || '—')}</span>${t.intake_brand ? ` · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand)}</b>` : ''} · <span>${t.finished_at ? 'передано ' + fmtDate(t.finished_at) : 'идёт приёмка'}</span></div></div>
       <div class="bar"><button class="btn" type="button" id="i-all">Отметить все проверенными</button><button class="btn pri" type="button" id="i-xls">Скачать Excel</button></div></div>
     <div class="bar" style="margin-bottom:10px"><span class="prog wide"><i id="i-prog"></i></span><span class="mu" id="i-cnt"></span></div>
     <div class="tabs" role="tablist">
@@ -1754,6 +1785,7 @@ async function viewIntake(id) {
     let v = i[f] || '', ph = '';
     if (f === 'code_1c' && isTmpCode(v)) { ph = v; v = ''; }
     const miss = (f === 'code_1c' && isTmpCode(i.code_1c)) || (f === 'name' && !i.name);
+    if (f === 'name') return `<textarea class="in${miss ? ' need' : ''}" rows="2" data-f="name" data-id="${num(i.id)}" aria-label="name">${esc(v)}</textarea>`;
     return `<input class="in${mono ? ' mono' : ''}${miss ? ' need' : ''}" data-f="${f}" data-id="${num(i.id)}" value="${esc(v)}" placeholder="${esc(ph)}"${locked ? ' disabled title="У товара есть фото — файлы названы по артикулу и бренду"' : ''} aria-label="${f}">`;
   };
   function draw() {
@@ -1762,11 +1794,11 @@ async function viewIntake(id) {
     body.innerHTML = list.map(i => `<tr class="${i.verified_at ? 'ver' : ''}">
       <td><a href="#item-${num(t.id)}-${num(i.id)}" title="Открыть товар">${i.first_photo ? `<img class="th" src="${esc(thumbUrl(i.first_photo))}" alt="">` : '<span class="noph">нет фото</span>'}</a></td>
       <td>${inp(i, 'article', true)}${aiNote(i, 'article')}</td><td>${inp(i, 'brand')}${aiNote(i, 'brand')}</td><td>${inp(i, 'code_1c', true)}</td>
-      <td style="min-width:220px">${inp(i, 'name')}${aiNote(i, 'name')}</td><td>${inp(i, 'cell', true)}</td>
+      <td style="min-width:300px">${inp(i, 'name')}${aiNote(i, 'name')}</td><td>${inp(i, 'cell', true)}</td>
       <td>${statusPill(i)}<div class="mu">${num(i.photos_stored)} фото</div></td>
       <td class="ck"><input type="checkbox" data-ver="${num(i.id)}"${i.verified_at ? ' checked' : ''} aria-label="Проверено"></td></tr>`).join('')
       || '<tr><td colspan="8" class="empty">Здесь пусто</td></tr>';
-    body.querySelectorAll('input[data-f]').forEach(el => el.onchange = async () => {
+    body.querySelectorAll('[data-f]').forEach(el => el.onchange = async () => {
       const it = items.find(x => num(x.id) === num(el.dataset.id)), f = el.dataset.f, val = el.value.trim();
       if (f === 'code_1c' && !val) { el.value = ''; return; }          // временный код NEW-… остаётся, пока не впишут настоящий
       el.disabled = true;
@@ -1778,7 +1810,11 @@ async function viewIntake(id) {
       } catch (e) { toast(e.message, 4000); el.value = f === 'code_1c' && isTmpCode(it.code_1c) ? '' : (it[f] || ''); }
       el.disabled = false;
     });
-    body.querySelectorAll('[data-ver]').forEach(c => c.onchange = () => verify([num(c.dataset.ver)], c.checked));
+    body.querySelectorAll('[data-ver]').forEach(c => c.onchange = () => {
+      const it = items.find(x => num(x.id) === num(c.dataset.ver));
+      if (c.checked && it && isTmpCode(it.code_1c) && !confirm('Нет кода 1С (стоит временный ' + it.code_1c + '). Всё равно отметить проверенным?')) { c.checked = false; return; }
+      verify([num(c.dataset.ver)], c.checked);
+    });
     count();
   }
   async function verify(ids, on) {
