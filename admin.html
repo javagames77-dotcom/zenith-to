@@ -160,6 +160,14 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 .uacts { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* журнал */
+.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.sortable:hover { color: var(--tx); }
+.sortable .ar { color: var(--or); }
+td.ck, th.ck { width: 34px; padding-right: 0; }
+td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-color: var(--or); }
+.bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--or-soft); border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; }
+.inav { display: flex; gap: 8px; align-items: center; }
+.top .gs { width: 260px; min-height: 32px; font-size: 13px; }
 .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .star { color: var(--or); font-size: 16px; }
@@ -178,6 +186,11 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
   .side { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--bd); padding: 8px; }
   .side a { flex: none; margin: 0; }
   .side a.soon { display: none; }
+  .top { flex-wrap: wrap; padding: 8px 12px; }
+  .top .who { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .top .gs { width: 100%; order: 9; }
+  .hd .bar { width: 100%; }
+  .tw table { min-width: 720px; }   /* таблицы листаются вбок внутри рамки, а не сжимаются */
   .side .ver { flex: none; align-self: center; padding: 0 8px; }
   .split { grid-template-columns: 1fr; }
   main { padding: 16px 14px 40px; }
@@ -191,7 +204,7 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
 <header class="top">
   <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
   <b>Зеніт-Авто<span>.фото</span></b>
-  <span class="who"><span class="lsw" data-lang-switch></span><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
+  <span class="who"><input class="in gs" id="gsearch" type="search" placeholder="Найти товар во всех заданиях" aria-label="Найти товар во всех заданиях" autocomplete="off"><span class="lsw" data-lang-switch></span><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
 </header>
 
 <div class="layout">
@@ -363,7 +376,14 @@ const I18N_UK = {
   'Открытых заданий нет.': 'Відкритих завдань немає.', ', чтобы создать новое.': ', щоб створити нове.',
   'Открыть задание снова? Оно вернётся фотографу.': 'Відкрити завдання знову? Воно повернеться фотографу.',
   'Закрыть задание? Оно пропадёт у фотографа и уйдёт в закрытые.': 'Закрити завдання? Воно зникне у фотографа й піде в закриті.',
-  'Задание закрыто': 'Завдання закрито', 'Задание открыто снова': 'Завдання відкрито знову'
+  'Задание закрыто': 'Завдання закрито', 'Задание открыто снова': 'Завдання відкрито знову',
+  // ── удобство (a6) ──
+  'Активность': 'Активність', 'Порядок': 'Порядок', 'Выбрать все': 'Вибрати всі', 'Выбрать товар': 'Вибрати товар',
+  'Снять выбор': 'Зняти вибір', '← Предыдущий': '← Попередній', 'Следующий →': 'Наступний →',
+  'Стрелка влево': 'Стрілка вліво', 'Стрелка вправо': 'Стрілка вправо',
+  'Найти товар во всех заданиях': 'Знайти товар у всіх завданнях', 'Поиск товара': 'Пошук товару', 'во всех заданиях': 'у всіх завданнях',
+  'Введите минимум 3 символа: артикул, код 1С или название': 'Введіть щонайменше 3 символи: артикул, код 1С або назву',
+  'Показаны первые 100 — уточните запрос': 'Показано перші 100 — уточніть запит', '№': '№'
 };
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
@@ -414,6 +434,12 @@ const I18N_RX = [
   [/^Фото больше (\d+) МБ$/, m => `Фото більше ${m[1]} МБ`],
   [/^Фото: только JPEG или PNG, получено (.+)$/, m => `Фото: лише JPEG або PNG, отримано ${m[1]}`],
   [/^версия (.+)$/, m => `версія ${m[1]}`],
+  [/^Выбрано: (\d+)$/, m => `Вибрано: ${m[1]}`],
+  [/^(\d+) из (\d+)$/, m => `${m[1]} з ${m[2]}`],
+  [/^Готово: (\d+)$/, m => `Готово: ${m[1]}`],
+  [/^Готово: (\d+), с ошибкой: (\d+)$/, m => `Готово: ${m[1]}, з помилкою: ${m[2]}`],
+  [/^Отметить «нет на приёмке» товаров: (\d+)\?$/, m => `Позначити «немає на прийманні» товарів: ${m[1]}?`],
+  [/^Вернуть в работу товаров: (\d+)\? Фотограф получит уведомление по каждому\.$/, m => `Повернути в роботу товарів: ${m[1]}? Фотограф отримає сповіщення щодо кожного.`],
   [/^Не снято товаров: (\d+)\. Всё равно закрыть\? Задание пропадёт у фотографа\.$/, m => `Не знято товарів: ${m[1]}. Усе одно закрити? Завдання зникне у фотографа.`],
   [/^(\d+)–(\d+) из (\d+)$/, m => `${m[1]}–${m[2]} з ${m[3]}`],
   [/^Приёмка (\d{2}\.\d{2}\.\d{4})$/, m => `Приймання ${m[1]}`],
@@ -536,7 +562,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a5';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a6';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -626,6 +652,7 @@ const routes = [
   [/^#task-(\d+)$/, m => viewTask(m[1])],
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')],
+  [/^#find=(.*)$/, m => viewFind(decodeURIComponent(m[1]))],
   [/^#audit(?:-(\d+))?$/, m => Auth.isAdmin() ? viewAudit(m[1]) : (location.hash = '#tasks')]
 ];
 function navOn(key) { document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key)); }
@@ -647,6 +674,7 @@ function showError(e, retry) {
 const tasksF = { status: 'open', period: 'all', from: '', to: '', user_id: '', q: '', offset: 0 };
 const TASK_STATUSES = [['open', 'В работе'], ['closed', 'Закрытые'], ['', 'Все']];
 let tasksReq = 0;
+const tasksSort = { key: '', dir: 'desc' };   // created | activity | progress | photos; пусто — новые сверху
 async function viewTasks() {
   navOn('tasks');
   view.innerHTML = `
@@ -692,7 +720,9 @@ async function loadTasksList() {
   const box = $('#t-body'); if (!box) return;
   const my = ++tasksReq;
   const r = auditRange(tasksF);
-  const p = { status: tasksF.status, from: r.from, to: r.to, user_id: tasksF.user_id, q: tasksF.q, limit: PAGE, offset: tasksF.offset };
+  const p = { status: tasksF.status, from: r.from, to: r.to, user_id: tasksF.user_id, q: tasksF.q, limit: PAGE, offset: tasksF.offset,
+    sort: tasksSort.key, dir: tasksSort.key ? tasksSort.dir : '' };
+  savePrefs();
   let data;
   try { data = await api('/photo/tasks?' + Object.entries(p).filter(([, v]) => v !== '' && v != null).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&')); }
   catch (e) {
@@ -718,7 +748,7 @@ async function loadTasksList() {
       <div class="er">Мало фото<b>${num(k.items_few_photos)}</b></div>
     </div>
     ${tasks.length ? `<div class="tw"><table>
-      <thead><tr><th>Задание</th><th>Фотограф</th><th>Снято</th><th>Фото</th><th>Статус</th><th>Флаги</th></tr></thead>
+      <thead><tr>${sortTh('created', 'Задание')}<th>Фотограф</th>${sortTh('progress', 'Снято')}${sortTh('photos', 'Фото')}${sortTh('activity', 'Активность')}<th>Статус</th><th>Флаги</th></tr></thead>
       <tbody>${tasks.map(t => {
         const total = num(t.items_total), done = num(t.items_done), pct = total ? Math.round(done / total * 100) : 0;
         const flags = [];
@@ -730,6 +760,7 @@ async function loadTasksList() {
           <td class="nw">${esc(t.photographer || '—')}</td>
           <td class="nw"><span class="prog"><i style="width:${pct}%"></i></span> ${done} / ${total}</td>
           <td class="nw">${num(t.photos_stored)}</td>
+          <td class="nw mu">${t.last_activity ? fmtDate(t.last_activity) : '—'}</td>
           <td>${t.status === 'open' ? '<span class="pill bl">в работе</span>' : '<span class="pill ok">закрыто</span>'}</td>
           <td>${flags.join(' ') || '<span class="mu">—</span>'}</td></tr>`;
       }).join('')}</tbody></table></div>`
@@ -738,7 +769,21 @@ async function loadTasksList() {
       : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}
     ${pagerHtml(tasksF.offset, tasks.length, total)}`;
   bindRowLinks();
+  box.querySelectorAll('[data-sort]').forEach(th => {
+    const go = () => {
+      const k = th.dataset.sort, cur = tasksSort.key || 'created';
+      if (k === cur) tasksSort.dir = tasksSort.dir === 'asc' ? 'desc' : 'asc'; else { tasksSort.key = k; tasksSort.dir = 'desc'; }
+      if (tasksSort.key === 'created' && tasksSort.dir === 'desc') tasksSort.key = '';
+      tasksF.offset = 0; loadTasksList();
+    };
+    th.onclick = go; th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
+  });
   bindPager(box, d => { tasksF.offset = Math.max(0, tasksF.offset + d * PAGE); loadTasksList(); window.scrollTo(0, 0); });
+}
+// заголовок колонки с сортировкой: стрелка показывает текущий порядок
+function sortTh(key, label) {
+  const cur = tasksSort.key || 'created', on = cur === key;
+  return `<th class="sortable" data-sort="${key}" tabindex="0" aria-sort="${on ? (tasksSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><span>${label}</span>${on ? ` <span class="ar">${tasksSort.dir === 'asc' ? '↑' : '↓'}</span>` : ''}</th>`;
 }
 // листалка: «← Назад · 1–50 из 312 · Вперёд →»
 const PAGE = 50;
@@ -751,7 +796,7 @@ function pagerHtml(offset, count, total) {
 function bindPager(root, go) { root.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => go(num(b.dataset.pg))); }
 function bindRowLinks() {
   view.querySelectorAll('tr[data-href]').forEach(tr => {
-    tr.onclick = () => { location.hash = tr.dataset.href; };
+    tr.onclick = e => { if (e.target.closest('input, label')) return; location.hash = tr.dataset.href; };
     tr.onkeydown = e => { if (e.key === 'Enter') location.hash = tr.dataset.href; };
   });
 }
@@ -919,6 +964,27 @@ function plural(n, a, b, c) { n = Math.abs(n) % 100; const d = n % 10; if (n > 1
 // ─── Задание: товары ──────────────────────────────────────
 const taskCache = {};
 let taskFilter = 'all', taskSearch = '';
+let taskSort = 'row';      // row | cell | status | photos
+const TASK_SORTS = [['row', '№'], ['cell', 'Ячейка'], ['status', 'Статус'], ['photos', 'Фото']];
+const cellKey = c => c ? String(c).toUpperCase().replace(/\d+/g, d => d.padStart(6, '0')) : '\uffff';   // без ячейки — в конец
+const ST_ORDER = { todo: 0, absent: 1, done: 2 };
+// товары задания так, как они видны в таблице: вкладка, поиск, порядок. По нему же ходит «пред./след.» в карточке
+function taskVisible(items, everything) {
+  const q = everything ? '' : taskSearch.trim().toUpperCase(), qn = q.replace(/[\s./-]/g, '');
+  let list = items.slice();
+  if (everything) { /* все товары, только порядок */ }
+  else if (taskFilter === 'flags') list = list.filter(i => itemFlags(i).length);
+  else if (taskFilter !== 'all') list = list.filter(i => i.status === taskFilter);
+  if (q) list = list.filter(i => (i.article_norm || '').includes(qn) || (i.code_1c || '').toUpperCase().includes(q) || (i.name || '').toUpperCase().includes(q));
+  const byRow = (a, b) => (a.row_no == null ? 1e9 : num(a.row_no)) - (b.row_no == null ? 1e9 : num(b.row_no)) || num(a.id) - num(b.id);
+  const cmp = {
+    row: byRow,
+    cell: (a, b) => cellKey(a.cell).localeCompare(cellKey(b.cell)) || byRow(a, b),
+    status: (a, b) => ST_ORDER[a.status] - ST_ORDER[b.status] || byRow(a, b),
+    photos: (a, b) => num(b.photos_stored) - num(a.photos_stored) || byRow(a, b)
+  }[taskSort] || byRow;
+  return list.sort(cmp);
+}
 async function loadTask(id) { const d = await api('/photo/task?task_id=' + id); taskCache[id] = d; return d; }
 async function viewTask(id) {
   navOn('tasks');
@@ -936,7 +1002,8 @@ async function viewTask(id) {
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}</div></div>
       <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
-    <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
+    <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам">
+      <label class="mu" for="t-sort">Порядок</label><select class="in" id="t-sort">${TASK_SORTS.map(([k, l]) => `<option value="${k}"${k === taskSort ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="tabs" role="tablist">
       <button type="button" data-f="all">Все ${items.length}</button>
       <button type="button" data-f="todo">Не сняты ${todo}</button>
@@ -944,31 +1011,60 @@ async function viewTask(id) {
       <button type="button" data-f="absent">Нет на приёмке ${absent}</button>
       <button type="button" data-f="flags">С флагами ${flagged}</button>
     </div>
-    <div class="tw"><table><thead><tr><th>№</th><th>Артикул · код 1С</th><th>Ячейка</th><th>Номенклатура</th><th>Фото</th><th>Статус и флаги</th></tr></thead><tbody id="items"></tbody></table></div>`;
+    <div class="bulk" id="bulk" hidden><b id="bulk-n"></b>
+      <button class="btn sm" type="button" data-bulk="absent">Нет на приёмке</button>
+      <button class="btn sm" type="button" data-bulk="todo">Вернуть в работу</button>
+      <button class="btn sm" type="button" id="bulk-clear">Снять выбор</button></div>
+    <div class="tw"><table><thead><tr><th class="ck"><input type="checkbox" id="ck-all" aria-label="Выбрать все"></th><th>№</th><th>Артикул · код 1С</th><th>Ячейка</th><th>Номенклатура</th><th>Фото</th><th>Статус и флаги</th></tr></thead><tbody id="items"></tbody></table></div>`;
   const body = $('#items');
+  const picked = new Set();
+  let shown = [];
+  function drawBulk() {
+    $('#bulk').hidden = !picked.size;
+    $('#bulk-n').textContent = 'Выбрано: ' + picked.size;
+    const all = $('#ck-all');
+    all.checked = shown.length > 0 && shown.every(i => picked.has(num(i.id)));
+    all.indeterminate = !all.checked && shown.some(i => picked.has(num(i.id)));
+  }
   function draw() {
     view.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
-    const q = taskSearch.trim().toUpperCase();
-    const qn = q.replace(/[\s./-]/g, '');
-    let list = items;
-    if (taskFilter === 'flags') list = list.filter(i => itemFlags(i).length);
-    else if (taskFilter !== 'all') list = list.filter(i => i.status === taskFilter);
-    if (q) list = list.filter(i => (i.article_norm || '').includes(qn) || (i.code_1c || '').toUpperCase().includes(q) || (i.name || '').toUpperCase().includes(q));
+    const list = shown = taskVisible(items);
     body.innerHTML = list.map(i => {
       const ph = (i.photos || []).filter(p => p.file_url);
       const th = ph.slice(0, 5).map((p, k) => `<img src="${esc(thumbUrl(p.file_url))}" alt="" loading="lazy" class="${k === 0 ? 'first' : ''}">`).join('');
       return `<tr class="click" data-href="#item-${num(t.id)}-${num(i.id)}" tabindex="0">
+        <td class="ck"><input type="checkbox" data-ck="${num(i.id)}"${picked.has(num(i.id)) ? ' checked' : ''} aria-label="Выбрать товар"></td>
         <td class="mu">${esc(i.row_no ?? '')}</td>
         <td class="nw"><b class="mono">${esc(i.article)}</b> <span class="mu">${esc(i.brand || '')}</span><div class="mu mono">${esc(i.code_1c)}</div></td>
         <td class="mono nw">${esc(i.cell) || '<span class="mu">—</span>'}</td>
         <td>${esc(i.name || '')}</td>
         <td class="nw">${ph.length ? `<span class="thumbs">${th}${ph.length > 5 ? '<em>+' + (ph.length - 5) + '</em>' : ''}</span>` : '<span class="mu">—</span>'}</td>
         <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</td></tr>`;
-    }).join('') || '<tr><td colspan="6" class="empty">Ничего не найдено</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="empty">Ничего не найдено</td></tr>';
     bindRowLinks();
+    body.querySelectorAll('[data-ck]').forEach(c => c.onchange = () => { const k = num(c.dataset.ck); c.checked ? picked.add(k) : picked.delete(k); drawBulk(); });
+    drawBulk();
   }
-  view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
+  $('#ck-all').onchange = e => { shown.forEach(i => e.target.checked ? picked.add(num(i.id)) : picked.delete(num(i.id))); draw(); };
+  $('#bulk-clear').onclick = () => { picked.clear(); draw(); };
+  view.querySelectorAll('[data-bulk]').forEach(b => b.onclick = async () => {
+    const status = b.dataset.bulk, ids = [...picked];
+    const ask = status === 'absent' ? 'Отметить «нет на приёмке» товаров: ' + ids.length + '?'
+      : 'Вернуть в работу товаров: ' + ids.length + '? Фотограф получит уведомление по каждому.';
+    if (!confirm(ask)) return;
+    view.querySelectorAll('[data-bulk], #bulk-clear').forEach(x => x.disabled = true);
+    let ok = 0, fail = 0;
+    for (const iid of ids) {
+      const it = items.find(i => num(i.id) === iid);
+      try { await api('/photo/item-status', { method: 'POST', body: { item_id: iid, status, comment: (it && it.comment) || '' } }); ok++; }
+      catch (e) { fail++; }
+    }
+    toast(fail ? 'Готово: ' + ok + ', с ошибкой: ' + fail : 'Готово: ' + ok);
+    delete taskCache[id]; viewTask(id);
+  });
+  view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; savePrefs(); draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
+  $('#t-sort').onchange = e => { taskSort = e.target.value; savePrefs(); draw(); };
   $('#refresh').onclick = () => viewTask(id);
   $('#t-close').onclick = async () => {
     const close = t.status !== 'closed';
@@ -1016,10 +1112,20 @@ async function viewItem(taskId, itemId) {
   if (!it) return showError(new Error('Товар не найден в задании'));
   const photos = (it.photos || []).filter(p => p.file_url);
   const n = photos.length;
+  // соседи по тому же списку, что в задании (вкладка, поиск, порядок); если товара в нём нет — по всем товарам
+  let nav = taskVisible(d.items || []);
+  if (!nav.some(i => num(i.id) === num(it.id))) nav = taskVisible(d.items || [], true);
+  const k = nav.findIndex(i => num(i.id) === num(it.id));
+  const prev = nav[k - 1], next = nav[k + 1];
+  const href = x => x ? '#item-' + num(taskId) + '-' + num(x.id) : '';
+  itemNav = { prev: href(prev), next: href(next) };
   view.innerHTML = `
-    <div class="crumb"><a href="#task-${num(taskId)}">← ${esc(d.task.title)}</a></div>
+    <div class="crumb bar" style="justify-content:space-between"><a href="#task-${num(taskId)}">← ${esc(d.task.title)}</a>
+      <span class="inav"><a class="btn sm" ${prev ? `href="${href(prev)}"` : 'aria-disabled="true" style="opacity:.4;pointer-events:none"'} title="Стрелка влево">← Предыдущий</a>
+        <span class="mu">${k + 1} из ${nav.length}</span>
+        <a class="btn sm" ${next ? `href="${href(next)}"` : 'aria-disabled="true" style="opacity:.4;pointer-events:none"'} title="Стрелка вправо">Следующий →</a></span></div>
     <div class="hd"><div><h1><span class="mono" style="font-size:22px">${esc(it.article)}</span> <span class="mu" style="font-size:15px;font-weight:400">${esc(it.brand || '')}</span></h1>
-      <div class="sub">${esc(it.name || '')} · код 1С ${esc(it.code_1c)}</div></div>
+      <div class="sub">${it.name ? esc(it.name) + ' · ' : ''}код 1С ${esc(it.code_1c)}</div></div>
       <div class="bar">${statusPill(it)} ${itemFlags(it).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}</div></div>
     <div class="split">
       <div class="card">
@@ -1066,7 +1172,8 @@ async function viewItem(taskId, itemId) {
       await api('/photo/item-status', { method: 'POST', body: { item_id: num(it.id), status, comment: $('#comment').value.trim() } });
       await loadTask(taskId);
       toast(status === 'done' ? 'Товар отмечен снятым' : status === 'absent' ? 'Отмечено: нет на приёмке' : 'Товар возвращён в работу');
-      viewItem(taskId, itemId);
+      if (status !== 'todo' && next) location.hash = href(next);     // снят / нет на приёмке — сразу к следующему
+      else viewItem(taskId, itemId);
     } catch (e) { toast(e.message); view.querySelectorAll('[data-st]').forEach(x => x.disabled = false); }
   });
   view.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => {
@@ -1470,6 +1577,7 @@ async function viewAudit(taskId, keepPage) {
   navOn('audit'); loading();
   const F = taskId ? auditTF : auditF;
   if (!keepPage) F.offset = 0;
+  savePrefs();
   const r = auditRange(F);
   const q = p => Object.entries(p).filter(([, v]) => v !== '' && v != null).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
   const base = { from: r.from, to: r.to, user_id: F.user_id, group: F.group, task_id: taskId || '', limit: PAGE, offset: F.offset };
@@ -1531,6 +1639,51 @@ async function viewAudit(taskId, keepPage) {
   bindPager(view, k => { F.offset = Math.max(0, F.offset + k * PAGE); viewAudit(taskId, true); window.scrollTo(0, 0); });
 }
 
+// ─── Поиск товара во всех заданиях ───────────────────────
+async function viewFind(q) {
+  navOn(''); const gs = $('#gsearch'); if (gs && gs.value !== q) gs.value = q;
+  if (q.trim().length < 3) { view.innerHTML = '<div class="hd"><div><h1>Поиск товара</h1></div></div><div class="card empty">Введите минимум 3 символа: артикул, код 1С или название</div>'; return; }
+  loading();
+  let d;
+  try { d = await api('/photo/admin/search?q=' + encodeURIComponent(q.trim())); } catch (e) { return showError(e, () => viewFind(q)); }
+  const items = d.items || [];
+  view.innerHTML = `<div class="hd"><div><h1>Поиск товара</h1><div class="sub"><span data-noi18n>«${esc(q)}»</span> <span>во всех заданиях</span></div></div></div>
+    ${items.length ? `<div class="tw"><table><thead><tr><th>Артикул · код 1С</th><th>Номенклатура</th><th>Задание</th><th>Фотограф</th><th>Фото</th><th>Статус</th></tr></thead><tbody>
+      ${items.map(i => `<tr class="click" data-href="#item-${num(i.task_id)}-${num(i.id)}" tabindex="0">
+        <td class="nw"><b class="mono">${esc(i.article)}</b> <span class="mu">${esc(i.brand || '')}</span><div class="mu mono">${esc(i.code_1c)}</div></td>
+        <td>${esc(i.name || '')}</td>
+        <td>${esc(i.task_title)}${i.task_status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}<div class="mu">${fmtDate(i.created_at)}</div></td>
+        <td class="nw">${esc(i.photographer || '—')}</td>
+        <td class="nw">${num(i.photos_stored)}</td>
+        <td>${statusPill(i)}</td></tr>`).join('')}</tbody></table></div>
+      ${items.length >= 100 ? '<p class="mu">Показаны первые 100 — уточните запрос</p>' : ''}`
+    : '<div class="card empty">Ничего не найдено</div>'}`;
+  bindRowLinks();
+}
+$('#gsearch').onkeydown = e => {
+  if (e.key !== 'Enter') return;
+  const v = e.target.value.trim(); if (!v) return;
+  const h = '#find=' + encodeURIComponent(v);
+  if (location.hash === h) viewFind(v); else location.hash = h;
+};
+
+// ─── сохранённые настройки экранов (фильтры, порядок) — на этом компьютере ──
+const PREFS_KEY = 'zf_admin_prefs';
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ tasksF: { ...tasksF, offset: 0 }, tasksSort, auditF: { ...auditF, offset: 0 }, taskFilter, taskSort }));
+  } catch (_) {}
+}
+(function loadPrefs() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (_) {}
+  if (p.tasksF) Object.assign(tasksF, p.tasksF, { offset: 0 });
+  if (p.tasksSort) Object.assign(tasksSort, p.tasksSort);
+  if (p.auditF) Object.assign(auditF, p.auditF, { offset: 0 });
+  if (p.taskFilter) taskFilter = p.taskFilter;
+  if (TASK_SORTS.some(([k]) => k === p.taskSort)) taskSort = p.taskSort;
+})();
+
 // ─── просмотр фото ────────────────────────────────────────
 const lb = { list: [], k: 0, back: null };
 function openLB(list, k) { lb.list = list; lb.k = k; lb.back = document.activeElement; $('#lb').classList.add('on'); drawLB(); $('#lb .x').focus(); }
@@ -1549,6 +1702,14 @@ $('#lb').addEventListener('click', e => {
   if (a === 'close' || e.target.id === 'lb') closeLB();
   if (a === 'prev') { lb.k = (lb.k - 1 + lb.list.length) % lb.list.length; drawLB(); }
   if (a === 'next') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
+});
+// стрелки в карточке товара — к предыдущему / следующему (не в полях ввода и не в просмотре фото)
+let itemNav = { prev: '', next: '' };
+document.addEventListener('keydown', e => {
+  if ($('#lb').classList.contains('on') || !/^#item-/.test(location.hash) || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.target.closest && e.target.closest('input, textarea, select')) return;
+  if (e.key === 'ArrowLeft' && itemNav.prev) location.hash = itemNav.prev;
+  if (e.key === 'ArrowRight' && itemNav.next) location.hash = itemNav.next;
 });
 document.addEventListener('keydown', e => {
   if (!$('#lb').classList.contains('on')) return;
