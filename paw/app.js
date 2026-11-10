@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v14';
+const APP_VERSION = 'v15';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -237,6 +237,10 @@ Object.assign(I18N_UK, {
   // ── окно «Настройки» (v12) ──
   'Настройки': 'Налаштування', 'Язык': 'Мова', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
   'Обновить приложение': 'Оновити застосунок', 'Новый товар без Excel': 'Новий товар без Excel',
+  'Ищу код в связках…': 'Шукаю код у зв’язках…', 'Найдено по связке кода': 'Знайдено за зв’язкою коду', 'По связке это:': 'За зв’язкою це:',
+  'Запомнить код для этого товара?': 'Запам’ятати код для цього товару?', 'В следующий раз коробка найдётся сканером': 'Наступного разу коробку знайде сканер',
+  'Запомнить': 'Запам’ятати', 'Не надо': 'Не треба', 'Код запомнен': 'Код запам’ятовано',
+  'Нет связи — код не запомнен, попробуйте позже': 'Немає зв’язку — код не запам’ятовано, спробуйте пізніше', 'Не удалось запомнить код': 'Не вдалося запам’ятати код',
   'Просмотр фото': 'Перегляд фото', 'Предыдущее фото': 'Попереднє фото', 'Следующее фото': 'Наступне фото',
   '(на этом устройстве нет службы push)': '(на цьому пристрої немає служби push)', 'Включаю…': 'Вмикаю…', 'Уведомления включены': 'Сповіщення ввімкнено',
   'Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.': 'Сповіщення заборонено. Дозвольте їх для цього застосунку в налаштуваннях телефона.',
@@ -594,6 +598,7 @@ const ICONS = {
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   left: '<path d="m15 18-6-6 6-6"/>',
   right: '<path d="m9 18 6-6-6-6"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
@@ -812,6 +817,7 @@ function drawItem(taskId, itemId) {
     el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPhotos(big, +el.dataset.pv); } };
   });
   $('#absent').onclick = () => setStatus(taskId, it, 'absent', n);
+  offerLink(taskId, it);
 }
 function takePhoto(taskId, it, n) {
   if (n >= MAX_PHOTOS) { toast('Уже ' + MAX_PHOTOS + ' фото — это максимум'); return; }
@@ -1068,22 +1074,62 @@ function onScan(d, taskId, texts, showMiss) {
     return true;
   }
   if (!showMiss) return false;
-  vibrate([30, 60, 30]);
   if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+  const st = $('#s-status'); if (st) st.textContent = 'Ищу код в связках…';
+  lookupLink(d, taskId, texts).then(r => { if (!r.opened && !scanDone) showScanMiss(d, taskId, texts, r.hint); });
+  return false;
+}
+// Связки кодов: код с коробки, который сканер не узнал, сервер ищет среди запомненных.
+// Нашёлся товар этого задания — открываем. Нет связи или связки — обычный экран «Нет в этом задании».
+async function lookupLink(d, taskId, texts) {
+  for (const t of texts.slice(0, 2)) {
+    let r;
+    try { r = await api('/photo/code-lookup?code=' + encodeURIComponent(t) + '&task_id=' + num(taskId)); } catch (_) { return {}; }
+    if (!r || !r.found) continue;
+    const it = r.item_id && (d.items || []).find(i => num(i.id) === num(r.item_id));
+    if (it) { vibrate(60); stopScanner(); toast('Найдено по связке кода'); location.hash = `#item-${num(taskId)}-${num(it.id)}`; return { opened: true }; }
+    return { hint: [r.article, r.brand].filter(Boolean).join(' ') };
+  }
+  return {};
+}
+function showScanMiss(d, taskId, texts, hint) {
+  vibrate([30, 60, 30]);
   const sheet = $('#s-sheet');
-  if (!sheet) return false;
+  if (!sheet) return;
   sheet.innerHTML = `
-    <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${texts.map(esc).join('<br>')}</div></div>
+    <div><b>Нет в этом задании</b><div class="mu mono" style="font-size:13px;word-break:break-all">${texts.map(esc).join('<br>')}</div>
+      ${hint ? `<div class="mu" style="font-size:13px">По связке это: <b data-noi18n>${esc(hint)}</b></div>` : ''}</div>
     <button class="btn pri" type="button" id="s-again">Сканировать ещё</button>
     <button class="btn" type="button" id="s-list">Найти в списке вручную</button>
     <button class="btn" type="button" id="s-add">Добавить как новый товар</button>`;
-  $('#s-again').onclick = () => { stopScanner(); viewScan(taskId); };
-  $('#s-list').onclick = () => { taskFilter = 'all'; taskSearch = ''; location.hash = '#task-' + taskId; };
+  $('#s-again').onclick = () => { linkOffer = null; stopScanner(); viewScan(taskId); };
+  // выбор вручную: код запоминаем — в карточке товара предложим связать его с этим товаром
+  $('#s-list').onclick = () => { linkOffer = { taskId: num(taskId), code: texts[0], at: Date.now() }; taskFilter = 'all'; taskSearch = ''; location.hash = '#task-' + taskId; };
   $('#s-add').onclick = () => {
+    linkOffer = null;
     const c = codeCandidates(texts[0]);
     location.hash = '#add-' + encodeURIComponent(c[c.length - 1] || texts[0]);
   };
-  return false;
+}
+// предложение «запомнить код для этого товара» после ручного выбора (живёт 15 минут, только в том же задании)
+let linkOffer = null;
+function offerLink(taskId, it) {
+  const o = linkOffer;
+  if (!o || o.taskId !== num(taskId) || Date.now() - o.at > 15 * 60 * 1000) { if (o && o.taskId !== num(taskId)) linkOffer = null; return; }
+  const box = document.createElement('div');
+  box.className = 'card linkoffer'; box.id = 'link-offer';
+  box.innerHTML = `<div class="lo-t">${icon('link', 20)}<div><b>Запомнить код для этого товара?</b>
+      <div class="mono lo-c">${esc(o.code)}</div><div class="mu" style="font-size:13px">В следующий раз коробка найдётся сканером</div></div></div>
+    <div class="row2"><button class="btn pri" type="button" id="lo-yes">Запомнить</button><button class="btn" type="button" id="lo-no">Не надо</button></div>`;
+  app.prepend(box);
+  $('#lo-no').onclick = () => { linkOffer = null; box.remove(); };
+  $('#lo-yes').onclick = async () => {
+    const b = $('#lo-yes'); b.disabled = true;
+    try {
+      await api('/photo/code-link', { method: 'POST', body: { code: o.code, item_id: num(it.id) } });
+      linkOffer = null; box.remove(); vibrate(40); toast('Код запомнен');
+    } catch (e) { b.disabled = false; toast(e.offline ? 'Нет связи — код не запомнен, попробуйте позже' : (e.message || 'Не удалось запомнить код')); }
+  };
 }
 
 // ─── Push-уведомления ─────────────────────────────────────
