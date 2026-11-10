@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=PT+Mono&display=swap" rel="stylesheet">
+<script>try { if (localStorage.getItem('zf_theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}</script>
 <style>
 :root {
   color-scheme: light;
@@ -27,13 +28,12 @@
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+/* тёмная тема — только по выбору в «Настройках» */
+:root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #0f1115; --sf: #171a20; --chip: #232832; --bd: #2c323d; --tx: #e8eaee; --mu: #9aa3b2; --or-soft: #3a2414;
     --ok: #5dd39e; --ok-bg: #173226; --er: #ff8a80; --er-bg: #3a1c1c; --wa: #ffb27a; --wa-bg: #3a2414; --bl: #8fb0ff; --bl-bg: #1a2440;
     --logo-bg: #ffffff;
-  }
 }
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -220,6 +220,6 @@ span.ok { color: var(--ok); } span.wa { color: var(--wa); }
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=18" defer></script>
+<script src="./app.js?v=19" defer></script>
 </body>
 </html>
