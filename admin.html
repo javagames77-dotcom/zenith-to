@@ -175,6 +175,8 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .ig input.need { border-color: var(--wa); background: var(--wa-soft, #fff7e6); }
 .ig input.saved { border-color: var(--ok); }
 .ig tr.ver td { background: var(--ok-soft, #eefaf1); }
+.ig .ai-n { font-size: 11.5px; color: var(--mu); margin-top: 3px; }
+.ig .ai-n.wa { color: var(--wa); }
 .ig img.th { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; display: block; }
 .ig .noph { width: 54px; height: 54px; border-radius: 8px; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--mu); font-size: 11px; }
 .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; }
@@ -411,7 +413,19 @@ const I18N_UK = {
   'артикул': 'артикул', 'название': 'назва', 'ячейка': 'комірка', 'артикул:': 'артикул:', 'бренд:': 'бренд:', 'код 1С:': 'код 1С:', 'название:': 'назва:', 'ячейка:': 'комірка:',
   'У товара есть фото — файлы названы по артикулу и бренду, их менять нельзя': 'У товару вже є фото: файли названо за артикулом і брендом, їх змінювати не можна',
   'Такой код 1С уже есть в этом задании': 'Такий код 1С уже є в цьому завданні', 'Поле не может быть пустым': 'Поле не може бути порожнім',
-  'Это поле менять нельзя': 'Це поле змінювати не можна', 'Здесь пусто': 'Тут порожньо', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'Это поле менять нельзя': 'Це поле змінювати не можна', 'Здесь пусто': 'Тут порожньо',
+  // ── распознавание этикетки (a9) ──
+  'прочитан ИИ — сверьте с коробкой': 'прочитано ШІ — звірте з коробкою', 'совпал с этикеткой': 'збігся з етикеткою', 'на этикетке:': 'на етикетці:',
+  'по похожим артикулам': 'за схожими артикулами', 'новый бренд с этикетки': 'новий бренд з етикетки', 'ИИ не распознал': 'ШІ не розпізнав',
+  'с этикетки': 'з етикетки', 'по истории артикула': 'за історією артикула', 'номер производителя': 'номер виробника', 'Прочитана этикетка': 'Прочитано етикетку',
+  'Тест распознавания этикеток': 'Тест розпізнавання етикеток',
+  'Первое фото уже снятых товаров против артикула и бренда из задания. Каждое фото — платный запрос к ИИ (около 0,5 цента)': 'Перше фото вже знятих товарів проти артикула й бренду із завдання. Кожне фото — платний запит до ШІ (близько 0,5 цента)',
+  'Сколько товаров': 'Скільки товарів', 'Запустить': 'Запустити',
+  'Выберите, сколько товаров проверить, и нажмите «Запустить». 10 товаров — около минуты.': 'Оберіть, скільки товарів перевірити, і натисніть «Запустити». 10 товарів — близько хвилини.',
+  'Модель читает этикетки… это может занять минуту': 'Модель читає етикетки… це може зайняти хвилину',
+  'Артикул есть в тексте': 'Артикул є в тексті', 'Артикул прочитан верно': 'Артикул прочитано правильно', 'Бренд верно': 'Бренд правильно',
+  'Название прочитано': 'Назву прочитано', 'Не читается / ошибки': 'Не читається / помилки', 'Должно быть': 'Має бути', 'Прочитано': 'Прочитано',
+  'да': 'так', 'нет': 'ні', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
@@ -596,7 +610,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a8';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a9';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -687,6 +701,7 @@ const routes = [
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')],
   [/^#links$/, () => viewLinks()],
+  [/^#label-test$/, () => Auth.isAdmin() ? viewLabelTest() : (location.hash = '#tasks')],
   [/^#intake-(\d+)$/, m => viewIntake(m[1])],
   [/^#find=(.*)$/, m => viewFind(decodeURIComponent(m[1]))],
   [/^#audit(?:-(\d+))?$/, m => Auth.isAdmin() ? viewAudit(m[1]) : (location.hash = '#tasks')]
@@ -1576,6 +1591,7 @@ function auditEvent(e) {
     set_default: ['Фотограф по умолчанию', ''], logout_all: ['Выход на всех устройствах', 'wa'],
     task_import: ['Загружено задание', 'bl'], task_assign: ['Сменён фотограф', ''],
     task_close: ['Задание закрыто', 'ok'], task_reopen: ['Задание открыто снова', 'wa'],
+    label_read: ['Прочитана этикетка', ''],
     intake_start: ['Начата приёмка', 'bl'], intake_finish: ['Приёмка передана завскладу', 'ok'],
     item_edit: ['Изменены данные товара', ''], items_verify: ['Товары проверены', 'ok'], items_unverify: ['Снята отметка «проверено»', 'wa'],
     item_done: ['Товар снят', 'ok'], item_absent: ['Нет на приёмке', 'er'], item_todo: ['Возвращён в работу', 'wa'],
@@ -1602,6 +1618,7 @@ function auditEvent(e) {
     case 'user_block': case 'user_unblock': case 'password_reset': case 'user_unlock': case 'set_default': case 'logout_all': det = nm(d.target); break;
     case 'task_import':
       det = `<span>${num(d.items)} ${plural(num(d.items), 'товар', 'товара', 'товаров')}</span> · <span>фотограф</span> ${nm(d.photographer || '—')}${d.file ? ` · <span class="mono">${esc(d.file)}</span>` : ''}`; break;
+    case 'label_read': det = `<span>бренд</span> <b data-noi18n>${esc(d.brand || '—')}</b>${d.name ? ` · <span data-noi18n>${esc(d.name)}</span>` : ''}${d.oem ? ` · <span class="mono">${esc(d.oem)}</span>` : ''}`; break;
     case 'intake_start': det = `<span>бренд</span> <b data-noi18n>${esc(d.brand || '')}</b>`; break;
     case 'intake_finish': det = `<span>снято ${num(d.done)} из ${num(d.items)}</span>`; break;
     case 'item_edit': det = `<span>${esc({ article: 'артикул', brand: 'бренд', code_1c: 'код 1С', name: 'название', cell: 'ячейка' }[d.field] || d.field)}:</span> <span class="mono">${esc(d.from || '—')}</span> → <b class="mono">${esc(d.to || '—')}</b>`; break;
@@ -1695,6 +1712,19 @@ async function viewAudit(taskId, keepPage) {
 // Фотограф дал артикул, бренд и фото; завскладом дописывает код 1С, название, ячейку и отмечает «проверено».
 // Артикул и бренд правятся только у товара без фото: по ним уже названы файлы.
 let intakeF = 'all';
+// что прочитал ИИ с этикетки (ai_data товара): короткая пометка под полем
+function aiNote(i, f) {
+  const a = i.ai; if (!a) return '';
+  const w = t => `<div class="ai-n wa">${t}</div>`, o = t => `<div class="ai-n">${t}</div>`;
+  if (f === 'article') return a.article_check === 'label' ? w('<span>прочитан ИИ — сверьте с коробкой</span>') : a.article_check === 'confirmed' ? o('<span>совпал с этикеткой</span>') : '';
+  if (f === 'brand') {
+    if (a.brand_conflict && a.brand_label) return w(`<span>на этикетке:</span> <b data-noi18n>${esc(a.brand_label)}</b>`);
+    return { prefix: w('<span>по похожим артикулам</span>'), label_new: w('<span>новый бренд с этикетки</span>'), none: w('<span>ИИ не распознал</span>'),
+             label: o('<span>с этикетки</span>'), history: o('<span>по истории артикула</span>') }[a.brand_source] || '';
+  }
+  if (f === 'name') return (a.name && a.name_source === 'label' ? o('<span>с этикетки</span>') : '') + (a.oem ? o(`<span>номер производителя</span> <b class="mono">${esc(a.oem)}</b>`) : '');
+  return '';
+}
 const isTmpCode = c => /^NEW-/i.test(c || '');
 async function viewIntake(id) {
   navOn('tasks'); loading();
@@ -1731,8 +1761,8 @@ async function viewIntake(id) {
     const list = items.filter(i => intakeF === 'all' || (intakeF === 'nover' && !i.verified_at) || (intakeF === 'need' && need(i)));
     body.innerHTML = list.map(i => `<tr class="${i.verified_at ? 'ver' : ''}">
       <td><a href="#item-${num(t.id)}-${num(i.id)}" title="Открыть товар">${i.first_photo ? `<img class="th" src="${esc(thumbUrl(i.first_photo))}" alt="">` : '<span class="noph">нет фото</span>'}</a></td>
-      <td>${inp(i, 'article', true)}</td><td>${inp(i, 'brand')}</td><td>${inp(i, 'code_1c', true)}</td>
-      <td style="min-width:220px">${inp(i, 'name')}</td><td>${inp(i, 'cell', true)}</td>
+      <td>${inp(i, 'article', true)}${aiNote(i, 'article')}</td><td>${inp(i, 'brand')}${aiNote(i, 'brand')}</td><td>${inp(i, 'code_1c', true)}</td>
+      <td style="min-width:220px">${inp(i, 'name')}${aiNote(i, 'name')}</td><td>${inp(i, 'cell', true)}</td>
       <td>${statusPill(i)}<div class="mu">${num(i.photos_stored)} фото</div></td>
       <td class="ck"><input type="checkbox" data-ver="${num(i.id)}"${i.verified_at ? ' checked' : ''} aria-label="Проверено"></td></tr>`).join('')
       || '<tr><td colspan="8" class="empty">Здесь пусто</td></tr>';
@@ -1772,6 +1802,39 @@ async function viewIntake(id) {
     b.disabled = false;
   };
   draw();
+}
+
+// ─── Тест распознавания этикеток (администратор) ──────────
+// Берёт уже снятые товары из заданий Excel: первое фото — этикетка, правильные артикул и бренд известны. Модель читает, мы сверяем.
+async function viewLabelTest() {
+  navOn('');
+  view.innerHTML = `<div class="hd"><div><h1>Тест распознавания этикеток</h1><div class="sub">Первое фото уже снятых товаров против артикула и бренда из задания. Каждое фото — платный запрос к ИИ (около 0,5 цента)</div></div>
+    <div class="bar"><select class="in" id="lt-n" aria-label="Сколько товаров">${[5, 10, 20, 30].map(n => `<option value="${n}"${n === 10 ? ' selected' : ''}>${n}</option>`).join('')}</select><button class="btn pri" type="button" id="lt-go">Запустить</button></div></div>
+    <div id="lt-body"><div class="card empty">Выберите, сколько товаров проверить, и нажмите «Запустить». 10 товаров — около минуты.</div></div>`;
+  $('#lt-go').onclick = async () => {
+    const b = $('#lt-go'), box = $('#lt-body'); b.disabled = true;
+    box.innerHTML = '<div class="loading">Модель читает этикетки… это может занять минуту</div>';
+    let d;
+    try { d = await api('/photo/admin/label-test?limit=' + num($('#lt-n').value)); } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; b.disabled = false; return; }
+    b.disabled = false;
+    const sm = d.summary, rows = d.rows || [];
+    if (!sm) { box.innerHTML = `<div class="card empty">${esc(d.note || 'Нет данных')}</div>`; return; }
+    const pc = k => sm.total ? Math.round(sm[k] / sm.total * 100) + '%' : '—';
+    const yn = v => v ? '<span class="pill ok">да</span>' : '<span class="pill er">нет</span>';
+    box.innerHTML = `<div class="kpi">
+        <div><span>Артикул есть в тексте</span><b>${pc('article_in_text')}</b></div>
+        <div class="ok"><span>Артикул прочитан верно</span><b>${pc('article_ok')}</b></div>
+        <div class="ok"><span>Бренд верно</span><b>${pc('brand_ok')}</b></div>
+        <div><span>Название прочитано</span><b>${pc('name_read')}</b></div>
+        <div class="er"><span>Не читается / ошибки</span><b>${num(sm.unreadable) + num(sm.errors)}</b></div></div>
+      <div class="tw"><table><thead><tr><th>Фото</th><th>Должно быть</th><th>Прочитано</th><th>Артикул</th><th>Бренд</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td><a href="${esc(r.url)}" target="_blank" rel="noopener"><img class="th" style="width:64px;height:64px;object-fit:cover;border-radius:8px" src="${esc(thumbUrl(r.url))}" alt=""></a></td>
+        <td><b class="mono">${esc(r.article)}</b> <span class="mu" data-noi18n>${esc(r.brand)}</span><div class="mu" data-noi18n>${esc(r.name_1c || '')}</div></td>
+        <td><span class="mono">${esc(r.read_article || '—')}</span> · <b data-noi18n>${esc(r.read_brand || '—')}</b>${r.brand_label && r.brand_label !== r.read_brand ? ` <span class="mu" data-noi18n>(${esc(r.brand_label)})</span>` : ''}
+          <div class="mu" data-noi18n>${esc(r.read_name || '')}${r.read_oem ? ' · ' + esc(r.read_oem) : ''}</div>${r.error ? `<div class="err" data-noi18n>${esc(r.error)}</div>` : ''}</td>
+        <td>${yn(r.article_ok)}${!r.article_ok && r.article_in_text ? '<div class="mu">есть в тексте</div>' : ''}</td><td>${yn(r.brand_ok)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  };
 }
 
 // ─── Связки кодов: «код на коробке → товар» ───────────────
