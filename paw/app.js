@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -134,6 +134,8 @@ const I18N_UK = {
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
 const I18N_RX = [
+  [/^Приёмка товара (.+)$/, m => `Приймання товару ${m[1]}`],
+  [/^Не сняты товаров: (\d+)\. Всё равно передать приёмку завскладу\?$/, m => `Не знято товарів: ${m[1]}. Усе одно передати приймання завскладу?`],
   [/^Показать ещё · осталось (\d+)$/, m => `Показати ще · залишилось ${m[1]}`],
   [/^(\d+) (товар|товара|товаров)$/, (m, pl) => `${m[1]} ${pl(+m[1], 'товар', 'товари', 'товарів')}`],
   [/^(\d+) в очереди$/, m => `${m[1]} у черзі`],
@@ -241,6 +243,17 @@ Object.assign(I18N_UK, {
   'Запомнить код для этого товара?': 'Запам’ятати код для цього товару?', 'В следующий раз коробка найдётся сканером': 'Наступного разу коробку знайде сканер',
   'Запомнить': 'Запам’ятати', 'Не надо': 'Не треба', 'Код запомнен': 'Код запам’ятовано',
   'Нет связи — код не запомнен, попробуйте позже': 'Немає зв’язку — код не запам’ятовано, спробуйте пізніше', 'Не удалось запомнить код': 'Не вдалося запам’ятати код',
+  'Приёмка': 'Приймання', 'Новая приёмка': 'Нове приймання', 'Здесь пусто': 'Тут порожньо',
+  'Бренд для всех товаров приёмки. Если попадётся другой — поменяете при добавлении товара.': 'Бренд для всіх товарів приймання. Якщо трапиться інший — зміните під час додавання товару.',
+  'Бренд, например KAP': 'Бренд, наприклад KAP', 'Начать приёмку': 'Почати приймання', 'Выберите или введите бренд': 'Оберіть або введіть бренд',
+  'Нет сети. Начать приёмку можно только онлайн': 'Немає мережі. Почати приймання можна лише онлайн',
+  'Приёмка · бренд': 'Приймання · бренд', 'Передано завскладу': 'Передано завскладу', 'Завершить приёмку — передать завскладу': 'Завершити приймання — передати завскладу',
+  'Передать приёмку завскладу на проверку?': 'Передати приймання завскладу на перевірку?', 'Приёмка передана завскладу': 'Приймання передано завскладу',
+  'Нет сети. Передать можно, когда появится связь': 'Немає мережі. Передати можна, коли з’явиться зв’язок',
+  'Артикул — проверьте, что прочитался верно': 'Артикул — перевірте, що прочитався правильно', 'Дополнительно (необязательно)': 'Додатково (необов’язково)',
+  'Остальное заполнит завскладом в админке.': 'Решту заповнить завсклад в адмінці.', 'Товар добавлен в приёмку': 'Товар додано до приймання',
+  'Товар уже есть в приёмке — открываю': 'Товар уже є в прийманні — відкриваю',
+  'Открытых заданий у вас нет. Задание назначает менеджер; приёмку товара можно начать кнопкой «+».': 'Відкритих завдань у вас немає. Завдання призначає менеджер; приймання товару можна почати кнопкою «+».',
   'Просмотр фото': 'Перегляд фото', 'Предыдущее фото': 'Попереднє фото', 'Следующее фото': 'Наступне фото',
   '(на этом устройстве нет службы push)': '(на цьому пристрої немає служби push)', 'Включаю…': 'Вмикаю…', 'Уведомления включены': 'Сповіщення ввімкнено',
   'Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.': 'Сповіщення заборонено. Дозвольте їх для цього застосунку в налаштуваннях телефона.',
@@ -599,6 +612,7 @@ const ICONS = {
   left: '<path d="m15 18-6-6 6-6"/>',
   right: '<path d="m9 18 6-6-6-6"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
@@ -633,6 +647,7 @@ const routes = [
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#scan-(\d+)$/, m => viewScan(m[1])],
   [/^#queue$/, () => viewQueue()],
+  [/^#addi-(\d+)(?:-(.*))?$/, m => viewAddIntake(m[1], m[2] ? decodeURIComponent(m[2]) : '')],
   [/^#add(?:-(.*))?$/, m => viewAdd(m[1] ? decodeURIComponent(m[1]) : '')]
 ];
 function route() {
@@ -673,16 +688,16 @@ async function viewTasks() {
       ${open.length ? `<div class="list">${open.map(t => {
         const total = num(t.items_total), done = num(t.items_done);
         return `<a class="row" href="#task-${num(t.id)}">
-          <span><b>${esc(t.title)}</b></span><span class="pill ${done === total && total ? 'ok' : 'bl'}">${done} / ${total}</span>
+          <span><b>${esc(t.title)}</b>${t.source === 'intake' ? ' <span class="pill or">Приёмка</span>' : ''}</span><span class="pill ${done === total && total ? 'ok' : 'bl'}">${done} / ${total}</span>
           <span class="n">${[t.file_name].filter(Boolean).map(esc).join(' · ')}</span>
           <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
-      }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; товар с приёмки можно добавить кнопкой ниже.</div>'}
+      }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; приёмку товара можно начать кнопкой «+».</div>'}
     </div>
     <div class="fabs">
-      <button class="fab" type="button" id="add-new" aria-label="Новый товар без Excel" title="Новый товар без Excel">${icon('plus', 28)}</button>
+      <button class="fab" type="button" id="add-new" aria-label="Новая приёмка" title="Новая приёмка">${icon('plus', 28)}</button>
     </div>`;
   Pull.on(viewTasks);
-  $('#add-new').onclick = () => { location.hash = '#add'; };
+  $('#add-new').onclick = openIntakeStart;
 }
 
 // ─── Задание ──────────────────────────────────────────────
@@ -708,6 +723,7 @@ async function viewTask(id) {
         <div class="count"><span class="mu">Снято товаров</span><b>${done} / ${items.length}</b></div>
         <div class="prog" style="margin-top:8px"><i style="width:${items.length ? Math.round(done / items.length * 100) : 0}%"></i></div>
       </div>
+      ${d.task.source === 'intake' ? `<div class="intake-bar">${icon('box', 18)}<span>Приёмка · бренд <b data-noi18n>${esc(d.task.intake_brand || '—')}</b></span>${d.task.finished_at ? '<span class="pill ok">Передано завскладу</span>' : ''}</div>` : ''}
       <button class="btn pri big" type="button" id="scan">Сканировать коробку</button>
       <input class="in" id="search" type="search" placeholder="Артикул, код 1С или название" value="${esc(taskSearch)}" aria-label="Поиск товара" autocomplete="off">
       <div class="chips" role="tablist">
@@ -722,7 +738,9 @@ async function viewTask(id) {
       </div>
       <div class="list" id="items"></div>
       <button class="btn" type="button" id="more" hidden></button>
+      ${d.task.source === 'intake' && !d.task.finished_at && items.length ? '<button class="btn" type="button" id="finish">Завершить приёмку — передать завскладу</button>' : ''}
     </div>`;
+  if ($('#finish')) $('#finish').onclick = () => finishIntake(id, items);
   const body = $('#items');
   let shown = TASK_PAGE;
   function draw(more) {
@@ -862,7 +880,8 @@ async function setStatus(taskId, it, status, n) {
     await cachePut(S.task[taskId], 'task-' + taskId);
     vibrate([20, 40, 20]);
     toast(status === 'done' ? 'Готово: ' + it.article : 'Отмечено: нет на приёмке');
-    location.hash = '#task-' + taskId;
+    const intake = S.task[taskId] && S.task[taskId].task && S.task[taskId].task.source === 'intake';
+    location.hash = (intake && status === 'done' ? '#scan-' : '#task-') + taskId;     // приёмка: следующая коробка
   } catch (e) {
     btns.forEach(b => b.disabled = false);
     toast(e.offline ? 'Нет сети. Фото сохранены, отметьте «Готово», когда появится связь' : e.message, 4000);
@@ -898,6 +917,111 @@ function viewAdd(prefill) {
       const r = await api('/photo/item-add', { method: 'POST', body });
       await loadTask(r.task_id);
       toast(r.created ? 'Товар добавлен в поток с приёмки' : 'Товар уже есть в потоке — открываю');
+      location.hash = `#item-${num(r.task_id)}-${num(r.item_id)}`;
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Добавить и снимать';
+      toast(e.offline ? 'Нет сети. Добавить товар можно только онлайн' : e.message, 4000);
+    }
+  };
+}
+
+// ─── Приёмка товара ───────────────────────────────────────
+// Фотограф начинает приёмку (бренд один на всю приёмку), сканирует коробки и снимает.
+// Чего нет в приёмке — сразу карточка нового товара: артикул из штрихкода, бренд приёмки. Данные проверяет завскладом в админке.
+let addPrefill = null;     // данные из связки кода для формы нового товара
+async function openIntakeStart() {
+  closeSettings();
+  let last = '';
+  try { last = localStorage.getItem('zf-brand') || ''; } catch (_) {}
+  const m = document.createElement('div');
+  m.className = 'modal'; m.id = 'settings';
+  m.innerHTML = `
+    <div class="sheet-m" role="dialog" aria-modal="true" aria-labelledby="in-ttl" tabindex="-1">
+      <div class="sheet-hd"><b id="in-ttl">Новая приёмка</b><button class="icb" type="button" id="in-x" aria-label="Закрыть">${icon('close', 22)}</button></div>
+      <div class="mu" style="font-size:13.5px">Бренд для всех товаров приёмки. Если попадётся другой — поменяете при добавлении товара.</div>
+      <div class="chips" id="in-brands"></div>
+      <input class="in" id="in-brand" value="${esc(last)}" placeholder="Бренд, например KAP" autocomplete="off" aria-label="Бренд">
+      <button class="btn pri big" type="button" id="in-go">Начать приёмку</button>
+    </div>`;
+  document.body.appendChild(m);
+  document.body.classList.add('modal-on');
+  const close = () => closeSettings();
+  m.onclick = e => { if (e.target === m) close(); };
+  $('#in-x').onclick = close;
+  settingsEsc = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', settingsEsc);
+  const drawChips = list => {
+    const box = $('#in-brands'); if (!box) return;
+    box.innerHTML = list.map(b => `<button type="button" data-b="${esc(b)}" data-noi18n>${esc(b)}</button>`).join('');
+    box.querySelectorAll('[data-b]').forEach(c => c.onclick = () => { $('#in-brand').value = c.dataset.b; mark(); });
+    mark();
+  };
+  const mark = () => { const v = $('#in-brand').value.trim(); $('#in-brands').querySelectorAll('[data-b]').forEach(c => c.classList.toggle('on', c.dataset.b === v)); };
+  $('#in-brand').oninput = mark;
+  drawChips(last ? [last] : []);
+  api('/photo/intake-brands').then(r => {
+    const list = [...new Set([r.last, last, ...(r.brands || [])].filter(Boolean))].slice(0, 8);
+    if (!$('#in-brand').value && r.last) $('#in-brand').value = r.last;
+    drawChips(list);
+  }).catch(() => {});
+  $('#in-go').onclick = async () => {
+    const brand = $('#in-brand').value.trim();
+    if (!brand) { toast('Выберите или введите бренд'); $('#in-brand').focus(); return; }
+    const b = $('#in-go'); b.disabled = true;
+    try {
+      const r = await api('/photo/intake-start', { method: 'POST', body: { brand } });
+      try { localStorage.setItem('zf-brand', brand); } catch (_) {}
+      close(); S.tasks = null;
+      await loadTask(r.task_id);
+      location.hash = '#task-' + num(r.task_id);
+    } catch (e) { b.disabled = false; toast(e.offline ? 'Нет сети. Начать приёмку можно только онлайн' : e.message, 4000); }
+  };
+  requestAnimationFrame(() => { m.classList.add('on'); m.querySelector('.sheet-m').focus(); });
+}
+async function finishIntake(id, items) {
+  const left = items.filter(i => i.status === 'todo').length;
+  if (!confirm(left ? 'Не сняты товаров: ' + left + '. Всё равно передать приёмку завскладу?' : 'Передать приёмку завскладу на проверку?')) return;
+  const b = $('#finish'); if (b) b.disabled = true;
+  try {
+    await api('/photo/intake-finish', { method: 'POST', body: { task_id: num(id) } });
+    toast('Приёмка передана завскладу');
+    await loadTask(id); viewTask(id);
+  } catch (e) { if (b) b.disabled = false; toast(e.offline ? 'Нет сети. Передать можно, когда появится связь' : e.message, 4000); }
+}
+async function viewAddIntake(taskId, code) {
+  header({ back: '#task-' + taskId, title: 'Новый товар' });
+  let d = S.task[taskId];
+  if (!d) { loading(); try { d = await loadTask(taskId); } catch (e) { return failView(e, () => viewAddIntake(taskId, code)); } }
+  const pre = addPrefill || {}; addPrefill = null;
+  const brand = pre.brand || d.task.intake_brand || '';
+  app.innerHTML = `
+    <div class="stack">
+      <div class="intake-bar">${icon('box', 18)}<span>${esc(d.task.title)}</span></div>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Артикул — проверьте, что прочитался верно</span>
+        <input class="in mono big-in" id="a-article" value="${esc(pre.article || code)}" autocomplete="off" autocapitalize="characters"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Бренд</span><input class="in" id="a-brand" value="${esc(brand)}" autocomplete="off"></label>
+      <details class="more-f"><summary>Дополнительно (необязательно)</summary>
+        <div class="stack" style="margin-top:10px">
+          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Код 1С</span><input class="in mono" id="a-code" value="${esc(pre.code_1c || '')}" autocomplete="off"></label>
+          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Название</span><input class="in" id="a-name" autocomplete="off"></label>
+          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Ячейка на складе</span><input class="in mono" id="a-cell" autocomplete="off" autocapitalize="characters"></label>
+        </div></details>
+      <div class="mu" style="font-size:12.5px">Остальное заполнит завскладом в админке.</div>
+    </div>
+    <div class="dock"><div class="in-dock"><button class="btn pri big" type="button" id="a-save">Добавить и снимать</button></div></div>`;
+  $('#a-save').onclick = async () => {
+    const body = {
+      article: $('#a-article').value.trim(), brand: $('#a-brand').value.trim(),
+      code_1c: $('#a-code').value.trim(), name: $('#a-name').value.trim(), cell: $('#a-cell').value.trim(),
+      task_id: num(taskId), source: 'pwa'
+    };
+    if (!body.article) { toast('Введите артикул'); $('#a-article').focus(); return; }
+    if (!body.brand) { toast('Введите бренд — он нужен для имени файла'); $('#a-brand').focus(); return; }
+    const btn = $('#a-save'); btn.disabled = true; btn.textContent = 'Добавляю…';
+    try {
+      const r = await api('/photo/item-add', { method: 'POST', body });
+      await loadTask(r.task_id);
+      toast(r.created ? 'Товар добавлен в приёмку' : 'Товар уже есть в приёмке — открываю');
       location.hash = `#item-${num(r.task_id)}-${num(r.item_id)}`;
     } catch (e) {
       btn.disabled = false; btn.textContent = 'Добавить и снимать';
@@ -1076,7 +1200,17 @@ function onScan(d, taskId, texts, showMiss) {
   if (!showMiss) return false;
   if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
   const st = $('#s-status'); if (st) st.textContent = 'Ищу код в связках…';
-  lookupLink(d, taskId, texts).then(r => { if (!r.opened && !scanDone) showScanMiss(d, taskId, texts, r.hint); });
+  lookupLink(d, taskId, texts).then(r => {
+    if (r.opened || scanDone) return;
+    if (d.task && d.task.source === 'intake') {     // приёмка: коробки нет — это новый товар, без лишних вопросов
+      const c = codeCandidates(texts[0]);
+      addPrefill = r.link ? { code_1c: r.link.code_1c, brand: r.link.brand, article: r.link.article } : null;
+      stopScanner();
+      location.hash = '#addi-' + num(taskId) + '-' + encodeURIComponent(c[c.length - 1] || texts[0]);
+      return;
+    }
+    showScanMiss(d, taskId, texts, r.hint);
+  });
   return false;
 }
 // Связки кодов: код с коробки, который сканер не узнал, сервер ищет среди запомненных.
@@ -1088,7 +1222,7 @@ async function lookupLink(d, taskId, texts) {
     if (!r || !r.found) continue;
     const it = r.item_id && (d.items || []).find(i => num(i.id) === num(r.item_id));
     if (it) { vibrate(60); stopScanner(); toast('Найдено по связке кода'); location.hash = `#item-${num(taskId)}-${num(it.id)}`; return { opened: true }; }
-    return { hint: [r.article, r.brand].filter(Boolean).join(' ') };
+    return { hint: [r.article, r.brand].filter(Boolean).join(' '), link: r };
   }
   return {};
 }
