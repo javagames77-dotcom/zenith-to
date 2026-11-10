@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -134,6 +134,7 @@ const I18N_UK = {
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
 const I18N_RX = [
+  [/^Показать ещё · осталось (\d+)$/, m => `Показати ще · залишилось ${m[1]}`],
   [/^(\d+) (товар|товара|товаров)$/, (m, pl) => `${m[1]} ${pl(+m[1], 'товар', 'товари', 'товарів')}`],
   [/^(\d+) в очереди$/, m => `${m[1]} у черзі`],
   [/^в очереди (\d+)$/, m => `у черзі ${m[1]}`],
@@ -236,6 +237,7 @@ Object.assign(I18N_UK, {
   // ── окно «Настройки» (v12) ──
   'Настройки': 'Налаштування', 'Язык': 'Мова', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
   'Обновить приложение': 'Оновити застосунок', 'Новый товар без Excel': 'Новий товар без Excel',
+  'Просмотр фото': 'Перегляд фото', 'Предыдущее фото': 'Попереднє фото', 'Следующее фото': 'Наступне фото',
   '(на этом устройстве нет службы push)': '(на цьому пристрої немає служби push)', 'Включаю…': 'Вмикаю…', 'Уведомления включены': 'Сповіщення ввімкнено',
   'Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.': 'Сповіщення заборонено. Дозвольте їх для цього застосунку в налаштуваннях телефона.',
   'Чтобы получать уведомления на iPhone, откройте сайт в Safari → «Поделиться» → «На экран „Домой“» и запускайте приложение с иконки.':
@@ -590,12 +592,15 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  left: '<path d="m15 18-6-6 6-6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
 const icon = (name, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
 
 function header({ back, title } = {}) {
+  Pull.on(null);
   $('#top').innerHTML = `
     ${back ? `<button class="back" type="button" aria-label="Назад" id="back">${icon('back')}</button>` : `<span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>`}
     <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span>
@@ -669,15 +674,16 @@ async function viewTasks() {
       }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; товар с приёмки можно добавить кнопкой ниже.</div>'}
     </div>
     <div class="fabs">
-      <button class="fab sm" type="button" id="refresh" aria-label="Обновить" title="Обновить">${icon('refresh', 22)}</button>
       <button class="fab" type="button" id="add-new" aria-label="Новый товар без Excel" title="Новый товар без Excel">${icon('plus', 28)}</button>
     </div>`;
-  $('#refresh').onclick = viewTasks;
+  Pull.on(viewTasks);
   $('#add-new').onclick = () => { location.hash = '#add'; };
 }
 
 // ─── Задание ──────────────────────────────────────────────
 let taskFilter = 'todo', taskSearch = '';
+try { taskFilter = localStorage.getItem('zf-filter') || 'todo'; } catch (_) {}
+const TASK_PAGE = 50;     // товары задания показываются частями — длинный список не тормозит
 let taskSort = 'row';
 try { taskSort = localStorage.getItem('zf-sort') || 'row'; } catch (_) {}
 const cellKey = c => String(c || '').toUpperCase().replace(/\d+/g, d => d.padStart(6, '0'));
@@ -710,9 +716,12 @@ async function viewTask(id) {
         <button type="button" data-s="cell">По ячейке</button>
       </div>
       <div class="list" id="items"></div>
+      <button class="btn" type="button" id="more" hidden></button>
     </div>`;
   const body = $('#items');
-  function draw() {
+  let shown = TASK_PAGE;
+  function draw(more) {
+    if (!more) shown = TASK_PAGE;
     app.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === taskFilter));
     const q = taskSearch.trim(), qn = norm(q), qu = q.toUpperCase();
     let list = taskFilter === 'all' ? items : items.filter(i => i.status === taskFilter);
@@ -721,16 +730,23 @@ async function viewTask(id) {
     if (taskSort === 'cell') list.sort((a, b) => (a.cell ? 0 : 1) - (b.cell ? 0 : 1) || cellKey(a.cell).localeCompare(cellKey(b.cell)) || num(a.row_no) - num(b.row_no));
     else list.sort((a, b) => num(a.row_no) - num(b.row_no));
     app.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === taskSort));
+    const total = list.length;
+    list = list.slice(0, shown);
     body.innerHTML = list.map(i => {
       const n = num(i.photos_stored) + localCount(i);
       const pill = i.status === 'done' ? '<span class="pill ok">снят</span>' : i.status === 'absent' ? '<span class="pill er">нет</span>' : n ? `<span class="pill bl">${n} фото</span>` : '<span class="pill">не снят</span>';
       return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
     }).join('') || `<div class="empty">${q ? 'Ничего не найдено' : 'Здесь пусто'}</div>`;
+    const rest = total - list.length, mb = $('#more');
+    mb.hidden = rest <= 0;
+    mb.textContent = 'Показать ещё · осталось ' + rest;
   }
-  app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; taskSearch = ''; $('#search').value = ''; draw(); });
+  app.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; try { localStorage.setItem('zf-filter', taskFilter); } catch (_) {} taskSearch = ''; $('#search').value = ''; draw(); });
+  $('#more').onclick = () => { shown += TASK_PAGE; draw(true); };
   app.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { taskSort = b.dataset.s; try { localStorage.setItem('zf-sort', taskSort); } catch (_) {} draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
   $('#scan').onclick = () => { location.hash = '#scan-' + num(d.task.id); };
+  Pull.on(() => viewTask(id));
   draw();
 }
 
@@ -752,8 +768,8 @@ function drawItem(taskId, itemId) {
   const n = server.length + local.length;
   const pct = Math.min(100, Math.round(n / MIN_PHOTOS * 100));
   const tiles = [
-    ...server.map(p => ({ src: thumb(p.file_url), badge: '', cls: '' })),
-    ...local.map(q => ({ src: localSrc(q), badge: q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка…' : 'в очереди', cls: q.status === 'rejected' ? 'er' : '' }))
+    ...server.map(p => ({ src: thumb(p.file_url), big: bigPhoto(p.file_url), cap: p.file_name || '', badge: '', cls: '' })),
+    ...local.map(q => ({ src: localSrc(q), big: localSrc(q), cap: '', badge: q.status === 'rejected' ? 'ошибка' : q.status === 'sending' ? 'отправка…' : 'в очереди', cls: q.status === 'rejected' ? 'er' : '' }))
   ];
   app.innerHTML = `
     <div class="stack">
@@ -770,7 +786,7 @@ function drawItem(taskId, itemId) {
       </div>
       ${n === 0 ? '<div class="info">Первое фото — этикетка коробки, чтобы было видно артикул.</div>' : ''}
       <div class="grid">
-        ${tiles.map((t, k) => `<div class="ph ${k === 0 ? 'first' : ''}"><img src="${esc(t.src)}" alt="Фото ${k + 1}" loading="lazy"><span class="n">${k + 1}</span>${t.badge ? `<span class="b ${t.cls}">${t.badge}</span>` : ''}</div>`).join('')}
+        ${tiles.map((t, k) => `<div class="ph ${k === 0 ? 'first' : ''}" data-pv="${k}" role="button" tabindex="0" aria-label="Открыть фото ${k + 1}"><img src="${esc(t.src)}" alt="Фото ${k + 1}" loading="lazy"><span class="n">${k + 1}</span>${t.badge ? `<span class="b ${t.cls}">${t.badge}</span>` : ''}</div>`).join('')}
         ${n < MAX_PHOTOS ? `<button class="add" type="button" id="add-tile" aria-label="Снять фото"><span>+</span>Снять</button>` : ''}
       </div>
       ${local.some(q => q.status === 'rejected') ? `<div class="err">Часть фото сервер не принял: ${esc(local.find(q => q.status === 'rejected').error || '')}. Переснимите их.</div>` : ''}
@@ -790,6 +806,11 @@ function drawItem(taskId, itemId) {
   $('#shoot').onclick = shoot;
   if ($('#add-tile')) $('#add-tile').onclick = shoot;
   $('#done').onclick = () => setStatus(taskId, it, 'done', n);
+  const big = tiles.map(t => ({ src: t.big || t.src, cap: t.cap }));
+  app.querySelectorAll('[data-pv]').forEach(el => {
+    el.onclick = () => openPhotos(big, +el.dataset.pv);
+    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPhotos(big, +el.dataset.pv); } };
+  });
   $('#absent').onclick = () => setStatus(taskId, it, 'absent', n);
 }
 function takePhoto(taskId, it, n) {
@@ -1273,6 +1294,92 @@ function showLogin(msg) {
   };
   (Auth.lastLogin() ? $('#pl-pass') : $('#pl-login')).focus();
 }
+// ─── Потянуть вниз — обновить (экран заданий и задание) ────
+// Работает, только когда страница прокручена к самому верху и не открыто окно поверх.
+const Pull = {
+  fn: null, y0: null, dy: 0, busy: false, el: null,
+  on(fn) { this.fn = fn; },
+  ind() {
+    if (!this.el) {
+      this.el = document.createElement('div'); this.el.className = 'ptr'; this.el.setAttribute('aria-hidden', 'true');
+      this.el.innerHTML = icon('refresh', 20); document.body.appendChild(this.el);
+    }
+    return this.el;
+  },
+  blocked() { return !this.fn || this.busy || window.scrollY > 0 || document.body.classList.contains('modal-on') || $('#scan-ui') || $('#pv'); },
+  start(e) { if (this.blocked() || e.touches.length !== 1) { this.y0 = null; return; } this.y0 = e.touches[0].clientY; this.dy = 0; },
+  move(e) {
+    if (this.y0 === null) return;
+    this.dy = e.touches[0].clientY - this.y0;
+    if (window.scrollY > 0) { this.reset(); return; }
+    if (this.dy <= 0) { if (this.el) this.el.style.opacity = 0; return; }   // палец ещё не пошёл вниз — ждём
+    const d = Math.min(this.dy * 0.5, 90), el = this.ind();
+    el.style.transform = `translate(-50%, ${d}px) rotate(${d * 4}deg)`;
+    el.style.opacity = Math.min(d / 60, 1);
+    el.classList.toggle('ready', d >= 60);
+  },
+  async end() {
+    if (this.y0 === null) return;
+    const go = this.dy * 0.5 >= 60;
+    this.y0 = null;
+    if (!go) { this.reset(); return; }
+    const el = this.ind(), fn = this.fn;
+    this.busy = true; el.classList.add('spin'); el.style.transform = 'translate(-50%, 60px)'; el.style.opacity = 1;
+    vibrate(15);
+    try { await fn(); } catch (_) {}
+    this.busy = false; this.reset();
+  },
+  reset() { this.y0 = null; if (this.el) { this.el.classList.remove('spin', 'ready'); this.el.style.transform = ''; this.el.style.opacity = 0; } }
+};
+document.addEventListener('touchstart', e => Pull.start(e), { passive: true });
+document.addEventListener('touchmove', e => Pull.move(e), { passive: true });
+document.addEventListener('touchend', () => Pull.end(), { passive: true });
+document.addEventListener('touchcancel', () => Pull.reset(), { passive: true });
+
+// ─── Просмотр фото крупно (касание миниатюры), листание пальцем ──
+function openPhotos(list, k) {
+  closePhotos();
+  const v = document.createElement('div');
+  v.className = 'pv'; v.id = 'pv'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-modal', 'true'); v.setAttribute('aria-label', 'Просмотр фото');
+  v.innerHTML = `<img id="pv-img" alt="">
+    <div class="pv-top"><span id="pv-n" class="pv-n"></span><button class="pv-b" type="button" id="pv-x" aria-label="Закрыть">${icon('close', 22)}</button></div>
+    <button class="pv-b pv-l" type="button" id="pv-l" aria-label="Предыдущее фото">${icon('left', 26)}</button>
+    <button class="pv-b pv-r" type="button" id="pv-r" aria-label="Следующее фото">${icon('right', 26)}</button>
+    <div class="pv-cap" id="pv-cap"></div>`;
+  document.body.appendChild(v);
+  document.body.classList.add('modal-on');
+  const show = () => {
+    const p = list[k];
+    $('#pv-img').src = p.src;
+    $('#pv-n').textContent = (k + 1) + ' / ' + list.length;
+    $('#pv-cap').textContent = p.cap || '';
+    $('#pv-l').hidden = list.length < 2; $('#pv-r').hidden = list.length < 2;
+  };
+  const go = d => { k = (k + d + list.length) % list.length; show(); };
+  $('#pv-x').onclick = closePhotos;
+  $('#pv-l').onclick = () => go(-1);
+  $('#pv-r').onclick = () => go(1);
+  let x0 = null, y0 = null;
+  v.addEventListener('touchstart', e => { if (e.touches.length === 1) { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; } }, { passive: true });
+  v.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1);
+    else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closePhotos();      // смахнуть вниз — закрыть
+  }, { passive: true });
+  photosKeys = e => { if (e.key === 'Escape') closePhotos(); if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); };
+  document.addEventListener('keydown', photosKeys);
+  show();
+}
+let photosKeys = null;
+function closePhotos() {
+  if (photosKeys) { document.removeEventListener('keydown', photosKeys); photosKeys = null; }
+  const v = $('#pv'); if (!v) return;
+  v.remove(); if (!$('#settings')) document.body.classList.remove('modal-on');
+}
+window.addEventListener('hashchange', closePhotos);
+const bigPhoto = u => u ? u.replace('/image/upload/', '/image/upload/c_limit,w_1600,h_1600,q_auto,f_auto/') : '';
+
 // ─── Окно «Настройки» ─────────────────────────────────────
 // Открывается шестерёнкой в шапке: язык, уведомления, версия, выход. Закрывается крестиком,
 // касанием по затемнению, «Назад»/Escape и при переходе на другой экран.
