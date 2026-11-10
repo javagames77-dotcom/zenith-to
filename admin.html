@@ -357,7 +357,13 @@ const I18N_UK = {
   'приложение': 'застосунок', 'админка': 'адмінка', 'было:': 'було:', 'код 1С': 'код 1С',
   // ── страницы и фильтры заданий ──
   '← Назад': '← Назад', 'Вперёд →': 'Вперед →', 'Все фотографы': 'Усі фотографи',
-  'Поиск по названию или файлу': 'Пошук за назвою або файлом', 'Поиск заданий': 'Пошук завдань'
+  'Поиск по названию или файлу': 'Пошук за назвою або файлом', 'Поиск заданий': 'Пошук завдань',
+  // ── закрытие заданий ──
+  'В работе': 'У роботі', 'Закрытые': 'Закриті', 'Все статусы': 'Усі статуси', 'Закрыть задание': 'Закрити завдання', 'Открыть снова': 'Відкрити знову',
+  'Открытых заданий нет.': 'Відкритих завдань немає.', ', чтобы создать новое.': ', щоб створити нове.',
+  'Открыть задание снова? Оно вернётся фотографу.': 'Відкрити завдання знову? Воно повернеться фотографу.',
+  'Закрыть задание? Оно пропадёт у фотографа и уйдёт в закрытые.': 'Закрити завдання? Воно зникне у фотографа й піде в закриті.',
+  'Задание закрыто': 'Завдання закрито', 'Задание открыто снова': 'Завдання відкрито знову'
 };
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
@@ -408,6 +414,7 @@ const I18N_RX = [
   [/^Фото больше (\d+) МБ$/, m => `Фото більше ${m[1]} МБ`],
   [/^Фото: только JPEG или PNG, получено (.+)$/, m => `Фото: лише JPEG або PNG, отримано ${m[1]}`],
   [/^версия (.+)$/, m => `версія ${m[1]}`],
+  [/^Не снято товаров: (\d+)\. Всё равно закрыть\? Задание пропадёт у фотографа\.$/, m => `Не знято товарів: ${m[1]}. Усе одно закрити? Завдання зникне у фотографа.`],
   [/^(\d+)–(\d+) из (\d+)$/, m => `${m[1]}–${m[2]} з ${m[3]}`],
   [/^Приёмка (\d{2}\.\d{2}\.\d{4})$/, m => `Приймання ${m[1]}`],
   [/^Поток с приёмки (\d{2}\.\d{2}\.\d{4})$/, m => `Потік із приймання ${m[1]}`]
@@ -529,7 +536,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a3';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a4';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -637,7 +644,8 @@ function showError(e, retry) {
 
 // ─── Задания ──────────────────────────────────────────────
 // фильтры списка заданий (период — по дате создания); список приходит страницами по PAGE
-const tasksF = { period: 'all', from: '', to: '', user_id: '', q: '', offset: 0 };
+const tasksF = { status: 'open', period: 'all', from: '', to: '', user_id: '', q: '', offset: 0 };
+const TASK_STATUSES = [['open', 'В работе'], ['closed', 'Закрытые'], ['', 'Все статусы']];
 let tasksReq = 0;
 async function viewTasks() {
   navOn('tasks');
@@ -645,6 +653,7 @@ async function viewTasks() {
     <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
       <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
     <div class="bar" style="margin-bottom:12px">
+      <select class="in" id="t-status" aria-label="Статус">${TASK_STATUSES.map(([k, t]) => `<option value="${k}"${k === tasksF.status ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <select class="in" id="t-period" aria-label="Период">${AUDIT_PERIODS.map(([k, t]) => `<option value="${k}"${k === tasksF.period ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <span class="bar" id="t-custom"${tasksF.period === 'custom' ? '' : ' hidden'}><input class="in" type="date" id="t-from" value="${esc(tasksF.from)}" aria-label="С даты"> — <input class="in" type="date" id="t-to" value="${esc(tasksF.to)}" aria-label="По дату"></span>
       <select class="in" id="t-user" aria-label="Фотограф"><option value="">Все фотографы</option></select>
@@ -666,6 +675,7 @@ async function viewTasks() {
   $('#t-from').onchange = e => { tasksF.from = e.target.value; if (tasksF.from && tasksF.to && tasksF.from <= tasksF.to) reload(); };
   $('#t-to').onchange = e => { tasksF.to = e.target.value; if (tasksF.from && tasksF.to && tasksF.from <= tasksF.to) reload(); };
   $('#t-user').onchange = e => { tasksF.user_id = e.target.value; reload(); };
+  $('#t-status').onchange = e => { tasksF.status = e.target.value; reload(); };
   let qt = null;
   $('#t-q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { tasksF.q = e.target.value.trim(); reload(); }, 400); };
   loadPhotographers().then(dd => {
@@ -678,7 +688,7 @@ async function loadTasksList() {
   const box = $('#t-body'); if (!box) return;
   const my = ++tasksReq;
   const r = auditRange(tasksF);
-  const p = { from: r.from, to: r.to, user_id: tasksF.user_id, q: tasksF.q, limit: PAGE, offset: tasksF.offset };
+  const p = { status: tasksF.status, from: r.from, to: r.to, user_id: tasksF.user_id, q: tasksF.q, limit: PAGE, offset: tasksF.offset };
   let data;
   try { data = await api('/photo/tasks?' + Object.entries(p).filter(([, v]) => v !== '' && v != null).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&')); }
   catch (e) {
@@ -720,6 +730,7 @@ async function loadTasksList() {
           <td>${flags.join(' ') || '<span class="mu">—</span>'}</td></tr>`;
       }).join('')}</tbody></table></div>`
       : filtered ? '<div class="card empty">Ничего не найдено</div>'
+      : tasksF.status === 'open' ? '<div class="card empty">Открытых заданий нет. <a href="#new">Загрузите Excel</a>, чтобы создать новое.</div>'
       : '<div class="card empty">Заданий пока нет. <a href="#new">Загрузите Excel</a>, чтобы создать первое.</div>'}
     ${pagerHtml(tasksF.offset, tasks.length, total)}`;
   bindRowLinks();
@@ -918,8 +929,8 @@ async function viewTask(id) {
   const pct = items.length ? Math.round(done / items.length * 100) : 0;
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
-    <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}</div></div>
-      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="refresh">Обновить</button></div></div>
+    <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}</div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
     <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
     <div class="tabs" role="tablist">
@@ -955,6 +966,19 @@ async function viewTask(id) {
   view.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { taskFilter = b.dataset.f; draw(); });
   $('#search').oninput = e => { taskSearch = e.target.value; draw(); };
   $('#refresh').onclick = () => viewTask(id);
+  $('#t-close').onclick = async () => {
+    const close = t.status !== 'closed';
+    const ask = !close ? 'Открыть задание снова? Оно вернётся фотографу.'
+      : todo ? 'Не снято товаров: ' + todo + '. Всё равно закрыть? Задание пропадёт у фотографа.'
+      : 'Закрыть задание? Оно пропадёт у фотографа и уйдёт в закрытые.';
+    if (!confirm(ask)) return;
+    const b = $('#t-close'); b.disabled = true;
+    try {
+      await api('/photo/task-close', { method: 'POST', body: { task_id: num(id), close } });
+      toast(close ? 'Задание закрыто' : 'Задание открыто снова');
+      delete taskCache[id]; viewTask(id);
+    } catch (e) { toast(e.message); b.disabled = false; }
+  };
   $('#xls').onclick = async () => {
     const b = $('#xls'); b.disabled = true; b.textContent = 'Готовлю…';
     try { exportTaskXlsx(await loadTask(id)); } catch (e) { toast(e.message); }
@@ -1401,6 +1425,7 @@ function auditEvent(e) {
     password_reset: ['Сменён пароль', 'wa'], user_unlock: ['Снята пауза входа', ''],
     set_default: ['Фотограф по умолчанию', ''], logout_all: ['Выход на всех устройствах', 'wa'],
     task_import: ['Загружено задание', 'bl'], task_assign: ['Сменён фотограф', ''],
+    task_close: ['Задание закрыто', 'ok'], task_reopen: ['Задание открыто снова', 'wa'],
     item_done: ['Товар снят', 'ok'], item_absent: ['Нет на приёмке', 'er'], item_todo: ['Возвращён в работу', 'wa'],
     item_add: ['Новый товар с приёмки', 'bl'], photos: ['Получены фото', '']
   };
@@ -1423,6 +1448,7 @@ function auditEvent(e) {
     case 'user_block': case 'user_unblock': case 'password_reset': case 'user_unlock': case 'set_default': case 'logout_all': det = nm(d.target); break;
     case 'task_import':
       det = `<span>${num(d.items)} ${plural(num(d.items), 'товар', 'товара', 'товаров')}</span> · <span>фотограф</span> ${nm(d.photographer || '—')}${d.file ? ` · <span class="mono">${esc(d.file)}</span>` : ''}`; break;
+    case 'task_close': case 'task_reopen': det = `<span>снято ${num(d.done)} из ${num(d.items)}</span>`; break;
     case 'task_assign': det = `<span data-noi18n>${esc(d.from || '—')}</span> → ${nm(d.to)}`; break;
     case 'item_done': case 'item_absent': case 'item_todo': det = d.comment ? `<span data-noi18n>«${esc(d.comment)}»</span>` : ''; break;
     case 'item_add': det = d.code_1c ? `<span class="mu">код 1С</span> <span class="mono">${esc(d.code_1c)}</span>` : ''; break;
