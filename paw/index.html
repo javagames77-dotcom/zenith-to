@@ -173,6 +173,15 @@ body.modal-on { overflow: hidden; }
 .fab:active { transform: scale(.95); }
 main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка списка не прячется под кнопками */
 .fab:focus-visible { outline: 2px solid var(--or); outline-offset: 3px; }
+/* этикетка */
+.lbl-prev { width: 100%; max-height: 52vh; object-fit: contain; border-radius: 14px; background: #000; }
+.lbl-row { display: flex; gap: 12px; align-items: center; }
+.lbl-mini { width: 76px; height: 76px; object-fit: cover; border-radius: 10px; flex: none; }
+.spin { color: var(--or); display: flex; justify-content: center; margin-bottom: 6px; }
+.spin svg { animation: ptr-spin .9s linear infinite; }
+.in.need { border-color: var(--wa); }
+span.ok { color: var(--ok); } span.wa { color: var(--wa); }
+#label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 /* приёмка товара */
 .pill.or { background: var(--or-soft); color: var(--wa); }
 .intake-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--chip); }
@@ -211,6 +220,6 @@ main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка 
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=16" defer></script>
+<script src="./app.js?v=17" defer></script>
 </body>
 </html>
