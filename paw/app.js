@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -216,7 +216,7 @@ Object.assign(I18N_UK, {
   // сканер
   'Запуск камеры…': 'Запуск камери…', 'Наведите на штрих-код или QR. Держите 15–25 см': 'Наведіть на штрих-код або QR. Тримайте 15–25 см',
   'Ищу код…': 'Шукаю код…', 'Ищу код… Держите ровно, код целиком в рамке': 'Шукаю код… Тримайте рівно, код повністю в рамці',
-  'Фонарик': 'Ліхтарик', 'Сфотографировать код': 'Сфотографувати код', '✕ Закрыть': '✕ Закрити', 'Или артикул': 'Або артикул',
+  'Фонарик': 'Ліхтарик', 'Сфотографировать код': 'Сфотографувати код', 'Или артикул': 'Або артикул',
   'Артикул вручную': 'Артикул вручну', 'Найти': 'Знайти', 'Распознаю фото…': 'Розпізнаю фото…',
   'На фото код не найден. Снимите ближе и ровнее.': 'На фото код не знайдено. Зніміть ближче й рівніше.',
   'Нет в этом задании': 'Немає в цьому завданні', 'Сканировать ещё': 'Сканувати ще', 'Найти в списке вручную': 'Знайти в списку вручну',
@@ -231,8 +231,11 @@ Object.assign(I18N_UK, {
   'Товар добавлен в поток с приёмки': 'Товар додано в потік із приймання', 'Товар уже есть в потоке — открываю': 'Товар уже є в потоці — відкриваю',
   'Нет сети. Добавить товар можно только онлайн': 'Немає мережі. Додати товар можна лише онлайн',
   // уведомления
-  '🔔 Включить уведомления о новых заданиях': '🔔 Увімкнути сповіщення про нові завдання', '🔔 Уведомления включены': '🔔 Сповіщення ввімкнено',
-  '🔔 Уведомления включены, пока приложение открыто': '🔔 Сповіщення ввімкнено, поки застосунок відкритий',
+  'Включить уведомления о новых заданиях': 'Увімкнути сповіщення про нові завдання',
+  'Уведомления включены, пока приложение открыто': 'Сповіщення ввімкнено, поки застосунок відкритий',
+  // ── окно «Настройки» (v12) ──
+  'Настройки': 'Налаштування', 'Язык': 'Мова', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
+  'Обновить приложение': 'Оновити застосунок',
   '(на этом устройстве нет службы push)': '(на цьому пристрої немає служби push)', 'Включаю…': 'Вмикаю…', 'Уведомления включены': 'Сповіщення ввімкнено',
   'Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.': 'Сповіщення заборонено. Дозвольте їх для цього застосунку в налаштуваннях телефона.',
   'Чтобы получать уведомления на iPhone, откройте сайт в Safari → «Поделиться» → «На экран „Домой“» и запускайте приложение с иконки.':
@@ -574,13 +577,32 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (S.queue.some(q => q.status !== 'rejected')) sync(); }, 30000);
 
 // ─── шапка ────────────────────────────────────────────────
+// ─── Иконки ───────────────────────────────────────────────
+// Линейные SVG одного стиля (контуры Lucide, лицензия MIT). Встроены в приложение — работают без сети,
+// цвет берут из текста (currentColor). Эмодзи в интерфейсе не используем.
+const ICONS = {
+  back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
+};
+const icon = (name, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
+
 function header({ back, title } = {}) {
   $('#top').innerHTML = `
-    ${back ? `<button class="back" type="button" aria-label="Назад" id="back">←</button>` : `<span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>`}
-    <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span><span class="mu" style="font-size:11px;flex:none">${APP_VERSION}</span>
-    <button class="qchip" type="button" id="qchip"></button>`;
+    ${back ? `<button class="back" type="button" aria-label="Назад" id="back">${icon('back')}</button>` : `<span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>`}
+    <span class="ttl">${title ? esc(title) : 'Зеніт-Авто<span>.фото</span>'}</span>
+    <button class="qchip" type="button" id="qchip"></button>
+    <button class="gear" type="button" id="gear" aria-label="Настройки" title="Настройки">${icon('settings', 22)}</button>`;
   if (back) $('#back').onclick = () => { location.hash = back; };
   $('#qchip').onclick = () => { location.hash = '#queue'; };
+  $('#gear').onclick = openSettings;
   drawQueueChip();
 }
 function drawQueueChip() {
@@ -646,13 +668,8 @@ async function viewTasks() {
       }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; товар с приёмки можно добавить кнопкой ниже.</div>'}
       <button class="btn" type="button" id="add-new">+ Новый товар без Excel</button>
       <button class="btn" type="button" id="refresh">Обновить</button>
-      <div id="push-box"></div>
-      <div class="whoami"><span class="lsw" data-lang-switch></span> Вы вошли как <b>${esc(Auth.user ? Auth.user.full_name : '')}</b> · <button type="button" class="link" id="logout">Выйти</button></div>
     </div>`;
   $('#refresh').onclick = viewTasks;
-  $('#logout').onclick = logout;
-  I18N.drawSwitches();
-  Push.draw();
   $('#add-new').onclick = () => { location.hash = '#add'; };
 }
 
@@ -941,7 +958,7 @@ async function viewScan(taskId) {
     <video id="v" playsinline muted autoplay></video>
     <div class="frame" aria-hidden="true"></div>
     <div class="hint" id="s-hint">Наведите на штрих-код или QR. Держите 15–25 см</div>
-    <div class="tools"><button type="button" id="s-close">✕ Закрыть</button><span><button type="button" id="s-zoom" hidden>×2</button> <button type="button" id="s-torch" hidden>Фонарик</button></span></div>
+    <div class="tools"><button type="button" id="s-close">${icon('close', 18)}<span>Закрыть</span></button><span><button type="button" id="s-zoom" hidden>×2</button> <button type="button" id="s-torch" hidden>Фонарик</button></span></div>
     <div class="sheet" id="s-sheet">
       <div class="mu" id="s-status" style="font-size:13px" aria-live="polite">Запуск камеры…</div>
       <button class="btn pri" type="button" id="s-photo">Сфотографировать код</button>
@@ -1132,13 +1149,13 @@ const Push = {
     const box = $('#push-box'); if (!box) return;
     const st = this.state();
     if (st === 'off') {
-      box.innerHTML = '<button class="btn" type="button" id="push-on">🔔 Включить уведомления о новых заданиях</button>';
+      box.innerHTML = `<button class="btn" type="button" id="push-on">${icon('bell', 18)}<span>Включить уведомления о новых заданиях</span></button>`;
       $('#push-on').onclick = e => this.enable(e.currentTarget);
       this.prepare();
     } else if (st === 'on') {
-      box.innerHTML = '<div class="mu" style="font-size:13px;text-align:center">🔔 Уведомления включены</div>';
+      box.innerHTML = '<div class="set-st ok">Уведомления включены</div>';
     } else if (st === 'local') {
-      box.innerHTML = '<div class="mu" style="font-size:13px;text-align:center">🔔 Уведомления включены, пока приложение открыто<br>(на этом устройстве нет службы push)</div>';
+      box.innerHTML = '<div class="set-st ok">Уведомления включены, пока приложение открыто</div><div class="mu" style="font-size:13px">(на этом устройстве нет службы push)</div>';
     } else if (st === 'denied') {
       box.innerHTML = '<div class="info">Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.</div>';
     } else if (st === 'ios-install') {
@@ -1219,7 +1236,7 @@ function showLogin(msg) {
   const wait = S.queue.filter(q => q.status !== 'rejected').length;
   app.innerHTML = `<form class="login" id="pwa-login-form" name="photographer-login" novalidate>
     <div class="login-lang"><span class="lsw" data-lang-switch></span></div>
-    <div class="login-cam" aria-hidden="true">📷</div>
+    <div class="login-cam" aria-hidden="true">${icon('camera', 52)}</div>
     <div class="login-kicker">Зеніт-Авто.фото</div>
     <h1>Приложение фотографа</h1>
     <p class="login-sub">Войдите один раз — дальше телефон помнит вход</p>
@@ -1253,6 +1270,48 @@ function showLogin(msg) {
   };
   (Auth.lastLogin() ? $('#pl-pass') : $('#pl-login')).focus();
 }
+// ─── Окно «Настройки» ─────────────────────────────────────
+// Открывается шестерёнкой в шапке: язык, уведомления, версия, выход. Закрывается крестиком,
+// касанием по затемнению, «Назад»/Escape и при переходе на другой экран.
+function openSettings() {
+  closeSettings();
+  const back = document.activeElement;
+  const m = document.createElement('div');
+  m.className = 'modal'; m.id = 'settings';
+  m.innerHTML = `
+    <div class="sheet-m" role="dialog" aria-modal="true" aria-labelledby="set-ttl" tabindex="-1">
+      <div class="sheet-hd"><b id="set-ttl">Настройки</b><button class="icb" type="button" id="set-x" aria-label="Закрыть">${icon('close', 22)}</button></div>
+      <div class="set-sec"><div class="set-lbl">${icon('globe', 18)}<span>Язык</span></div><span class="lsw" data-lang-switch></span></div>
+      <div class="set-sec col"><div class="set-lbl">${icon('bell', 18)}<span>Уведомления</span></div><div id="push-box" style="width:100%"></div></div>
+      <div class="set-sec"><div class="set-lbl">${icon('phone', 18)}<span>Версия приложения</span></div><b class="mono">${APP_VERSION}</b></div>
+      <button class="btn" type="button" id="set-reload">${icon('refresh', 18)}<span>Обновить приложение</span></button>
+      <div class="set-sec"><div class="set-lbl">${icon('user', 18)}<span>Вы вошли как</span></div><b>${esc(Auth.user ? Auth.user.full_name : '')}</b></div>
+      <button class="btn" type="button" id="set-out">${icon('logout', 18)}<span>Выйти</span></button>
+    </div>`;
+  document.body.appendChild(m);
+  document.body.classList.add('modal-on');
+  const close = () => { closeSettings(); if (back && back.focus) back.focus(); };
+  m.onclick = e => { if (e.target === m) close(); };
+  $('#set-x').onclick = close;
+  $('#set-out').onclick = async () => { closeSettings(); await logout(); };
+  $('#set-reload').onclick = async () => {
+    try { const r = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null; if (r) await r.update(); } catch (_) {}
+    location.reload();
+  };
+  settingsEsc = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', settingsEsc);
+  I18N.drawSwitches();
+  Push.draw();
+  requestAnimationFrame(() => { m.classList.add('on'); m.querySelector('.sheet-m').focus(); });
+}
+let settingsEsc = null;
+function closeSettings() {
+  if (settingsEsc) { document.removeEventListener('keydown', settingsEsc); settingsEsc = null; }
+  const m = $('#settings'); if (!m) return;
+  m.remove(); document.body.classList.remove('modal-on');
+}
+window.addEventListener('hashchange', closeSettings);
+
 async function logout() {
   await refreshQueue();
   const wait = S.queue.filter(q => q.status !== 'rejected').length;
