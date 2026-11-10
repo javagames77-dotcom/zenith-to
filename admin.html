@@ -47,6 +47,7 @@ a { color: var(--bl); }
 .side a:hover { background: var(--chip); }
 .side a.on { background: var(--or-soft); color: var(--wa); font-weight: 700; box-shadow: inset 3px 0 0 var(--or); }
 .side a.soon { color: var(--mu); }
+.side .ver { padding: 14px 12px 0; color: var(--mu); font-size: 11.5px; }
 .side a.soon::after { content: "скоро"; font-size: 10.5px; background: var(--chip); border-radius: 999px; padding: 0 7px; }
 :root[lang="uk"] .side a.soon::after { content: "незабаром"; }
 main { padding: 20px 24px 40px; min-width: 0; }
@@ -176,6 +177,7 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
   .side { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--bd); padding: 8px; }
   .side a { flex: none; margin: 0; }
   .side a.soon { display: none; }
+  .side .ver { flex: none; align-self: center; padding: 0 8px; }
   .split { grid-template-columns: 1fr; }
   main { padding: 16px 14px 40px; }
   .prog.wide { width: 160px; }
@@ -198,7 +200,8 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
     <a class="soon" aria-disabled="true">Каталог</a>
     <a class="soon" aria-disabled="true">Связки кодов</a>
     <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
-    <a href="#audit" data-nav="audit">Журнал</a>
+    <a href="#audit" data-nav="audit" id="nav-audit" hidden>Журнал</a>
+    <div class="ver" id="ver"></div>
   </nav>
   <main id="view" tabindex="-1"></main>
 </div>
@@ -400,6 +403,7 @@ const I18N_RX = [
   [/^Нет кода 1С или артикула в строках: (.+)$/, m => `Немає коду 1С або артикула в рядках: ${m[1]}`],
   [/^Фото больше (\d+) МБ$/, m => `Фото більше ${m[1]} МБ`],
   [/^Фото: только JPEG или PNG, получено (.+)$/, m => `Фото: лише JPEG або PNG, отримано ${m[1]}`],
+  [/^версия (.+)$/, m => `версія ${m[1]}`],
   [/^Приёмка (\d{2}\.\d{2}\.\d{4})$/, m => `Приймання ${m[1]}`],
   [/^Поток с приёмки (\d{2}\.\d{2}\.\d{4})$/, m => `Потік із приймання ${m[1]}`]
 ];
@@ -520,6 +524,7 @@ const I18N = (() => {
   };
 })();
 
+const ADMIN_VERSION = 'a2';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -609,7 +614,7 @@ const routes = [
   [/^#task-(\d+)$/, m => viewTask(m[1])],
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')],
-  [/^#audit(?:-(\d+))?$/, m => viewAudit(m[1])]
+  [/^#audit(?:-(\d+))?$/, m => Auth.isAdmin() ? viewAudit(m[1]) : (location.hash = '#tasks')]
 ];
 function navOn(key) { document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === key)); }
 function route() {
@@ -848,7 +853,7 @@ async function viewTask(id) {
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}</div></div>
-      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button><a class="btn" href="#audit-${num(t.id)}">Журнал</a><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="refresh">Обновить</button></div></div>
     <div class="bar" style="margin-bottom:12px"><span class="prog wide"><i style="width:${pct}%"></i></span><span class="mu">снято ${done} из ${items.length}${absent ? ' · нет на приёмке ' + absent : ''}</span></div>
     <div class="bar" style="margin-bottom:10px"><input class="in" id="search" type="search" placeholder="Поиск: артикул, код 1С или название" value="${esc(taskSearch)}" style="flex:1;max-width:420px" aria-label="Поиск по товарам"></div>
     <div class="tabs" role="tablist">
@@ -1055,6 +1060,7 @@ function drawWho() {
   const u = Auth.user;
   $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
   $('#nav-users').hidden = !Auth.isAdmin();
+  $('#nav-audit').hidden = !Auth.isAdmin();
 }
 function showLogin(msg) {
   document.body.classList.add('need-auth');
@@ -1300,7 +1306,7 @@ async function viewUsers() {
   if ($('#u-name') && usersPanel && usersPanel.kind === 'create') $('#u-name').focus();
 }
 
-// ─── Журнал действий (администратор и менеджер) ──────────
+// ─── Журнал действий (только администратор) ──────────
 // Фото в журнале собраны по товару за день; автор — фотограф задания.
 const AUDIT_GROUPS = [['', 'Все события'], ['auth', 'Вход и выход'], ['users', 'Пользователи'], ['tasks', 'Задания'], ['items', 'Товары'], ['photos', 'Фото']];
 const AUDIT_PERIODS = [['today', 'Сегодня'], ['week', '7 дней'], ['month', '30 дней'], ['all', 'Всё время'], ['custom', 'Свой период']];
@@ -1338,7 +1344,8 @@ function auditEvent(e) {
   const app = () => `<span class="pill">${d.app === 'pwa' ? 'приложение' : 'админка'}</span>`;
   let det = '';
   switch (e.action) {
-    case 'login': det = [d.device, d.version].filter(Boolean).length ? `<span class="mu" data-noi18n>${esc([d.device, d.version].filter(Boolean).join(' · '))}</span>` : ''; break;
+    case 'login': if (d.app !== 'pwa') break;   // в админке устройство — длинная строка браузера, не показываем
+      det = [d.device, d.version].filter(Boolean).length ? `<span class="mu" data-noi18n>${esc([d.device, d.version].filter(Boolean).join(' · '))}</span>` : ''; break;
     case 'login_failed': case 'login_locked': det = `${app()} <span class="mu">логин</span> <span class="mono">${esc(d.login || '')}</span>`; break;
     case 'login_denied': det = app(); break;
     case 'setup': case 'user_create': det = `${nm(d.target)} · ${role(d.role)}`; break;
@@ -1460,6 +1467,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') { lb.k = (lb.k + 1) % lb.list.length; drawLB(); }
 });
 
+$('#ver').textContent = 'версия ' + ADMIN_VERSION;
 I18N.start();
 boot();
 </script>
