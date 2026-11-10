@@ -359,7 +359,7 @@ const I18N_UK = {
   '← Назад': '← Назад', 'Вперёд →': 'Вперед →', 'Все фотографы': 'Усі фотографи',
   'Поиск по названию или файлу': 'Пошук за назвою або файлом', 'Поиск заданий': 'Пошук завдань',
   // ── закрытие заданий ──
-  'В работе': 'У роботі', 'Закрытые': 'Закриті', 'Все статусы': 'Усі статуси', 'Закрыть задание': 'Закрити завдання', 'Открыть снова': 'Відкрити знову',
+  'В работе': 'У роботі', 'Закрытые': 'Закриті', 'Все': 'Усі', 'Все статусы': 'Усі статуси', 'Закрыть задание': 'Закрити завдання', 'Открыть снова': 'Відкрити знову',
   'Открытых заданий нет.': 'Відкритих завдань немає.', ', чтобы создать новое.': ', щоб створити нове.',
   'Открыть задание снова? Оно вернётся фотографу.': 'Відкрити завдання знову? Воно повернеться фотографу.',
   'Закрыть задание? Оно пропадёт у фотографа и уйдёт в закрытые.': 'Закрити завдання? Воно зникне у фотографа й піде в закриті.',
@@ -536,7 +536,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a4';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a5';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -645,15 +645,15 @@ function showError(e, retry) {
 // ─── Задания ──────────────────────────────────────────────
 // фильтры списка заданий (период — по дате создания); список приходит страницами по PAGE
 const tasksF = { status: 'open', period: 'all', from: '', to: '', user_id: '', q: '', offset: 0 };
-const TASK_STATUSES = [['open', 'В работе'], ['closed', 'Закрытые'], ['', 'Все статусы']];
+const TASK_STATUSES = [['open', 'В работе'], ['closed', 'Закрытые'], ['', 'Все']];
 let tasksReq = 0;
 async function viewTasks() {
   navOn('tasks');
   view.innerHTML = `
     <div class="hd"><div><h1>Задания</h1><div class="sub">Задания из Excel и их ход съёмки</div></div>
       <div class="bar"><button class="btn" type="button" id="refresh">Обновить</button><a class="btn pri" href="#new">Загрузить Excel</a></div></div>
+    <div class="tabs" role="tablist" aria-label="Статус">${TASK_STATUSES.map(([k, t]) => `<button type="button" role="tab" data-st="${k}" class="${k === tasksF.status ? 'on' : ''}" aria-selected="${k === tasksF.status}">${t}</button>`).join('')}</div>
     <div class="bar" style="margin-bottom:12px">
-      <select class="in" id="t-status" aria-label="Статус">${TASK_STATUSES.map(([k, t]) => `<option value="${k}"${k === tasksF.status ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <select class="in" id="t-period" aria-label="Период">${AUDIT_PERIODS.map(([k, t]) => `<option value="${k}"${k === tasksF.period ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <span class="bar" id="t-custom"${tasksF.period === 'custom' ? '' : ' hidden'}><input class="in" type="date" id="t-from" value="${esc(tasksF.from)}" aria-label="С даты"> — <input class="in" type="date" id="t-to" value="${esc(tasksF.to)}" aria-label="По дату"></span>
       <select class="in" id="t-user" aria-label="Фотограф"><option value="">Все фотографы</option></select>
@@ -675,7 +675,11 @@ async function viewTasks() {
   $('#t-from').onchange = e => { tasksF.from = e.target.value; if (tasksF.from && tasksF.to && tasksF.from <= tasksF.to) reload(); };
   $('#t-to').onchange = e => { tasksF.to = e.target.value; if (tasksF.from && tasksF.to && tasksF.from <= tasksF.to) reload(); };
   $('#t-user').onchange = e => { tasksF.user_id = e.target.value; reload(); };
-  $('#t-status').onchange = e => { tasksF.status = e.target.value; reload(); };
+  view.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    tasksF.status = b.dataset.st;
+    view.querySelectorAll('[data-st]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+    reload();
+  });
   let qt = null;
   $('#t-q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { tasksF.q = e.target.value.trim(); reload(); }, 400); };
   loadPhotographers().then(dd => {
@@ -706,7 +710,7 @@ async function loadTasksList() {
     photos_stored: sum(open, 'photos_stored'), photos_pending: sum(open, 'photos_pending'), items_few_photos: sum(open, 'items_few_photos') });
   const filtered = tasksF.period !== 'all' || tasksF.user_id || tasksF.q;
   box.innerHTML = `
-    <div class="kpi">
+    <div class="kpi"${tasksF.status === 'closed' ? ' hidden' : ''}>
       <div>Товаров в работе<b>${num(k.items_total)}</b></div>
       <div class="ok">Снято товаров<b>${num(k.items_done)}</b></div>
       <div>Фото загружено<b>${num(k.photos_stored)}</b></div>
