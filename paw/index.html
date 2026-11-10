@@ -143,6 +143,30 @@ body.login-on .top { display: none; }
 .login .lsw { border-color: #2f3541; }
 .login .lsw button { color: #9aa3b2; }
 .login .lsw button.on { background: #F38435; color: #111318; }
+/* иконки и окно «Настройки» (v12) */
+.ic { display: block; flex: none; }
+.top .back { display: inline-flex; align-items: center; justify-content: center; }
+.qchip { margin-left: auto; }
+.gear { flex: none; border: 0; background: none; color: var(--mu); width: 40px; height: 40px; margin-right: -6px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.gear:active { background: var(--chip); }
+.gear:focus-visible, .icb:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+.modal { position: fixed; inset: 0; z-index: 50; background: rgba(10,12,16,0); display: flex; align-items: flex-end; justify-content: center; transition: background .2s; }
+.modal.on { background: rgba(10,12,16,.5); }
+.sheet-m { width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; background: var(--sf); color: var(--tx); border-radius: 18px 18px 0 0; padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; transform: translateY(100%); transition: transform .22s ease-out; }
+.modal.on .sheet-m { transform: none; }
+.sheet-m:focus { outline: none; }
+.sheet-hd { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 2px; }
+.sheet-hd b { font-size: 18px; }
+.icb { border: 0; background: var(--chip); color: var(--tx); width: 40px; height: 40px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.set-sec { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--bd); }
+.set-sec.col { flex-direction: column; align-items: flex-start; }
+.set-lbl { display: flex; align-items: center; gap: 8px; color: var(--mu); }
+.set-st { font-weight: 600; }
+.set-st.ok { color: var(--ok); }
+body.modal-on { overflow: hidden; }
+.scan .tools button { display: inline-flex; align-items: center; gap: 6px; }
+.login-cam { color: #F38435; }
+@media (prefers-reduced-motion: reduce) { .modal, .sheet-m { transition: none; } }
 </style>
 </head>
 <body>
@@ -152,6 +176,6 @@ body.login-on .top { display: none; }
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=11" defer></script>
+<script src="./app.js?v=12" defer></script>
 </body>
 </html>
