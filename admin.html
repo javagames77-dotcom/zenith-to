@@ -212,7 +212,7 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
     <a href="#tasks" data-nav="tasks">Задания</a>
     <a href="#new" data-nav="new">Новое задание</a>
     <a class="soon" aria-disabled="true">Каталог</a>
-    <a class="soon" aria-disabled="true">Связки кодов</a>
+    <a href="#links" data-nav="links">Связки кодов</a>
     <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
     <a href="#audit" data-nav="audit" id="nav-audit" hidden>Журнал</a>
     <div class="ver" id="ver"></div>
@@ -383,7 +383,15 @@ const I18N_UK = {
   'Стрелка влево': 'Стрілка вліво', 'Стрелка вправо': 'Стрілка вправо',
   'Найти товар во всех заданиях': 'Знайти товар у всіх завданнях', 'Поиск товара': 'Пошук товару', 'во всех заданиях': 'у всіх завданнях',
   'Введите минимум 3 символа: артикул, код 1С или название': 'Введіть щонайменше 3 символи: артикул, код 1С або назву',
-  'Показаны первые 100 — уточните запрос': 'Показано перші 100 — уточніть запит', '№': '№'
+  'Показаны первые 100 — уточните запрос': 'Показано перші 100 — уточніть запит', '№': '№',
+  // ── связки кодов (a7) ──
+  'Код на коробке, который сканер не узнал, и товар, который выбрал фотограф. В следующий раз такая коробка находится сама': 'Код на коробці, який сканер не впізнав, і товар, який обрав фотограф. Наступного разу така коробка знаходиться сама',
+  'Поиск: код, артикул, код 1С или название': 'Пошук: код, артикул, код 1С або назва', 'Поиск связок': 'Пошук зв’язок',
+  'Код на коробке': 'Код на коробці', 'Товар': 'Товар', 'Кто создал': 'Хто створив', 'Сработала': 'Спрацювала', 'Удалить': 'Видалити',
+  'Связок пока нет. Они появятся, когда фотограф выберет товар вручную и нажмёт «Запомнить»': 'Зв’язок поки немає. Вони з’являться, коли фотограф обере товар вручну й натисне «Запам’ятати»',
+  'Удалить связку? Коробка с этим кодом больше не будет находиться сканером автоматически.': 'Видалити зв’язку? Коробку з цим кодом сканер більше не знаходитиме автоматично.',
+  'Связка удалена': 'Зв’язку видалено', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
@@ -562,7 +570,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a6';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a7';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -652,6 +660,7 @@ const routes = [
   [/^#task-(\d+)$/, m => viewTask(m[1])],
   [/^#item-(\d+)-(\d+)$/, m => viewItem(m[1], m[2])],
   [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')],
+  [/^#links$/, () => viewLinks()],
   [/^#find=(.*)$/, m => viewFind(decodeURIComponent(m[1]))],
   [/^#audit(?:-(\d+))?$/, m => Auth.isAdmin() ? viewAudit(m[1]) : (location.hash = '#tasks')]
 ];
@@ -1509,7 +1518,7 @@ async function viewUsers() {
 
 // ─── Журнал действий (только администратор) ──────────
 // Фото в журнале собраны по товару за день; автор — фотограф задания.
-const AUDIT_GROUPS = [['', 'Все события'], ['auth', 'Вход и выход'], ['users', 'Пользователи'], ['tasks', 'Задания'], ['items', 'Товары'], ['photos', 'Фото']];
+const AUDIT_GROUPS = [['', 'Все события'], ['auth', 'Вход и выход'], ['users', 'Пользователи'], ['tasks', 'Задания'], ['items', 'Товары'], ['photos', 'Фото'], ['links', 'Связки кодов']];
 const AUDIT_PERIODS = [['today', 'Сегодня'], ['week', '7 дней'], ['month', '30 дней'], ['all', 'Всё время'], ['custom', 'Свой период']];
 const auditF = { period: 'week', from: '', to: '', user_id: '', group: '', offset: 0 };
 const auditTF = { period: 'all', from: '', to: '', user_id: '', group: '', offset: 0 };   // журнал одного задания: по умолчанию всё время
@@ -1538,7 +1547,9 @@ function auditEvent(e) {
     task_import: ['Загружено задание', 'bl'], task_assign: ['Сменён фотограф', ''],
     task_close: ['Задание закрыто', 'ok'], task_reopen: ['Задание открыто снова', 'wa'],
     item_done: ['Товар снят', 'ok'], item_absent: ['Нет на приёмке', 'er'], item_todo: ['Возвращён в работу', 'wa'],
-    item_add: ['Новый товар с приёмки', 'bl'], photos: ['Получены фото', '']
+    item_add: ['Новый товар с приёмки', 'bl'], photos: ['Получены фото', ''],
+    link_create: ['Связка кода создана', 'bl'], link_update: ['Связка кода изменена', 'wa'], link_delete: ['Связка кода удалена', 'er'],
+    scan_miss: ['Сканер не нашёл код', 'wa']
   };
   const [label, cls] = M[e.action] || [e.action, ''];
   const nm = s => `<b data-noi18n>${esc(s)}</b>`;
@@ -1562,6 +1573,11 @@ function auditEvent(e) {
     case 'task_close': case 'task_reopen': det = `<span>снято ${num(d.done)} из ${num(d.items)}</span>`; break;
     case 'task_assign': det = `<span data-noi18n>${esc(d.from || '—')}</span> → ${nm(d.to)}`; break;
     case 'item_done': case 'item_absent': case 'item_todo': det = d.comment ? `<span data-noi18n>«${esc(d.comment)}»</span>` : ''; break;
+    case 'link_create': case 'link_update': case 'link_delete': case 'scan_miss':
+      det = `<span class="mono">${esc(d.code || '')}</span>`;
+      if (d.article && e.action !== 'scan_miss' && !e.item_id) det += ` → <b class="mono">${esc(d.article)}</b> <span class="mu" data-noi18n>${esc(d.brand || '')}</span>`;
+      if (d.was_article) det += ` · <span class="mu">было:</span> <span class="mono">${esc(d.was_article)}</span>`;
+      break;
     case 'item_add': det = d.code_1c ? `<span class="mu">код 1С</span> <span class="mono">${esc(d.code_1c)}</span>` : ''; break;
     case 'photos':
       det = `<span>${num(d.count)} фото</span>${num(d.count) > 1 ? ` · № ${num(d.first)}–${num(d.last)}` : ` · № ${num(d.first)}`}`;
@@ -1637,6 +1653,49 @@ async function viewAudit(taskId, keepPage) {
   $('#a-user').onchange = e => { F.user_id = e.target.value; go(); };
   $('#a-group').onchange = e => { F.group = e.target.value; go(); };
   bindPager(view, k => { F.offset = Math.max(0, F.offset + k * PAGE); viewAudit(taskId, true); window.scrollTo(0, 0); });
+}
+
+// ─── Связки кодов: «код на коробке → товар» ───────────────
+// Создаёт фотограф в приложении (подтверждает после ручного выбора товара). Здесь — просмотр и удаление ошибочных.
+const linksF = { q: '', offset: 0 };
+let linksReq = 0;
+async function viewLinks() {
+  navOn('links');
+  view.innerHTML = `
+    <div class="hd"><div><h1>Связки кодов</h1><div class="sub">Код на коробке, который сканер не узнал, и товар, который выбрал фотограф. В следующий раз такая коробка находится сама</div></div>
+      <div class="bar"><button class="btn" type="button" id="l-refresh">Обновить</button></div></div>
+    <div class="bar" style="margin-bottom:12px"><input class="in" id="l-q" type="search" placeholder="Поиск: код, артикул, код 1С или название" value="${esc(linksF.q)}" style="flex:1;max-width:420px" aria-label="Поиск связок"></div>
+    <div id="l-body"><div class="loading">Загрузка…</div></div>`;
+  let qt = null;
+  $('#l-q').oninput = e => { clearTimeout(qt); qt = setTimeout(() => { linksF.q = e.target.value.trim(); linksF.offset = 0; loadLinks(); }, 400); };
+  $('#l-refresh').onclick = () => loadLinks();
+  await loadLinks();
+}
+async function loadLinks() {
+  const box = $('#l-body'); if (!box) return;
+  const my = ++linksReq;
+  let d;
+  try { d = await api('/photo/admin/code-links?q=' + encodeURIComponent(linksF.q) + '&limit=' + PAGE + '&offset=' + linksF.offset); }
+  catch (e) { if (my === linksReq && $('#l-body')) { box.innerHTML = '<div class="err">' + esc(e.message || e) + '</div>'; } return; }
+  if (my !== linksReq || !$('#l-body')) return;
+  const links = d.links || [], total = num(d.total);
+  if (!links.length && linksF.offset > 0) { linksF.offset = 0; return loadLinks(); }
+  box.innerHTML = links.length ? `<div class="tw"><table><thead><tr><th>Код на коробке</th><th>Товар</th><th>Кто создал</th><th>Сработала</th><th></th></tr></thead><tbody>
+    ${links.map(l => `<tr>
+      <td class="mono" style="word-break:break-all;max-width:260px">${esc(l.code)}</td>
+      <td class="nw"><b class="mono">${esc(l.article || '')}</b> <span class="mu">${esc(l.brand || '')}</span><div class="mu mono">${esc(l.code_1c)}</div>${l.name ? `<div class="mu">${esc(l.name)}</div>` : ''}</td>
+      <td class="nw"><span data-noi18n>${esc(l.created_by || '—')}</span><div class="mu">${fmtDate(l.created_at)}</div></td>
+      <td class="nw">${num(l.uses)}${l.last_used_at ? `<div class="mu">${fmtDate(l.last_used_at)}</div>` : ''}</td>
+      <td><button class="btn sm" type="button" data-del="${num(l.id)}">Удалить</button></td></tr>`).join('')}
+    </tbody></table></div>${pagerHtml(linksF.offset, links.length, total)}`
+    : `<div class="card empty">${linksF.q ? 'Ничего не найдено' : 'Связок пока нет. Они появятся, когда фотограф выберет товар вручную и нажмёт «Запомнить»'}</div>`;
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Удалить связку? Коробка с этим кодом больше не будет находиться сканером автоматически.')) return;
+    b.disabled = true;
+    try { await api('/photo/admin/code-link-delete', { method: 'POST', body: { id: num(b.dataset.del) } }); toast('Связка удалена'); loadLinks(); }
+    catch (e) { toast(e.message); b.disabled = false; }
+  });
+  bindPager(box, k => { linksF.offset = Math.max(0, linksF.offset + k * PAGE); loadLinks(); window.scrollTo(0, 0); });
 }
 
 // ─── Поиск товара во всех заданиях ───────────────────────
