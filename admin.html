@@ -184,6 +184,11 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .ig img.th { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; display: block; }
 .ig .noph { width: 54px; height: 54px; border-radius: 8px; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--mu); font-size: 11px; }
 .thm { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
+.x1c { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.x1c label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.x1c-sum { margin: -2px 0 10px; font-size: 12.5px; }
+.xov { position: fixed; inset: 0; z-index: 60; background: rgba(10,12,16,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.xbox { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow: auto; }
 .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .star { color: var(--or); font-size: 16px; }
@@ -434,7 +439,14 @@ const I18N_UK = {
   // ── состояние проверки (a10) ──
   'Ждут проверки': 'Чекають перевірки', 'проверено': 'перевірено', 'не проверено': 'не перевірено', 'фотограф ещё снимает': 'фотограф ще знімає',
   'Данные для 1С проверены': 'Дані для 1С перевірено', 'Требуется проверка данных для 1С': 'Потрібна перевірка даних для 1С', 'товаров пока нет': 'товарів поки немає',
-  'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані',
+  // ── выгрузка в 1С (a12) ──
+  'Выгрузка в 1С': 'Вивантаження в 1С', 'Отчёт Excel': 'Звіт Excel',
+  'Адрес папки на сервере': 'Адреса папки на сервері', 'Папка партии': 'Папка партії',
+  'Только проверенные товары': 'Лише перевірені товари', 'Скачать архив: фото + Excel': 'Завантажити архів: фото + Excel',
+  'Нечего выгружать': 'Нема чого вивантажувати', 'Собираю архив…': 'Збираю архів…', 'Готово': 'Готово', 'Не загрузилась библиотека архива': 'Не завантажилася бібліотека архіву',
+  'в 1С': 'в 1С', 'главное': 'головне', 'Сделать главным': 'Зробити головним', 'Для 1С фото не выбраны': 'Для 1С фото не обрано',
+  'Как по умолчанию': 'Як за замовчуванням', 'Оставьте хотя бы одно фото для 1С': 'Залиште хоча б одне фото для 1С', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
@@ -488,6 +500,14 @@ const I18N_RX = [
   [/^версия (.+)$/, m => `версія ${m[1]}`],
   [/^передано завскладу (.+)$/, m => `передано завскладу ${m[1]}`],
   [/^проверить для 1С · (\d+)$/, m => `перевірити для 1С · ${m[1]}`],
+  [/^Excel без заголовков: код 1С и ссылка на фото\. Фото (\d+)×(\d+), имена nw_Бренд_Артикул_N\.jpg, № 1 — главное\.$/, m => `Excel без заголовків: код 1С і посилання на фото. Фото ${m[1]}×${m[2]}, імена nw_Бренд_Артикул_N.jpg, № 1 — головне.`],
+  [/^Товаров: (\d+), фото: (\d+)$/, m => `Товарів: ${m[1]}, фото: ${m[2]}`],
+  [/^Пропущено без кода 1С: (\d+)$/, m => `Пропущено без коду 1С: ${m[1]}`],
+  [/^Пропущено без фото: (\d+)$/, m => `Пропущено без фото: ${m[1]}`],
+  [/^Пропущено непроверенных: (\d+)$/, m => `Пропущено неперевірених: ${m[1]}`],
+  [/^Фото (\d+) из (\d+)$/, m => `Фото ${m[1]} з ${m[2]}`],
+  [/^Готово\. Не скачались фото: (\d+)$/, m => `Готово. Не завантажилися фото: ${m[1]}`],
+  [/^Для 1С: (\d+) фото, главное —$/, m => `Для 1С: ${m[1]} фото, головне —`],
   [/^Не проверено для 1С товаров: (\d+)\. Всё равно закрыть\?$/, m => `Не перевірено для 1С товарів: ${m[1]}. Усе одно закрити?`],
   [/^Нет кода 1С \(стоит временный (.+)\)\. Всё равно отметить проверенным\?$/, m => `Немає коду 1С (стоїть тимчасовий ${m[1]}). Усе одно позначити перевіреним?`],
   [/^передано (.+)$/, m => `передано ${m[1]}`],
@@ -622,7 +642,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a11';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a12';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1079,7 +1099,7 @@ async function viewTask(id) {
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}</div></div>
-      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn" type="button" id="xls">Скачать Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn pri" type="button" id="x1c">Выгрузка в 1С</button><button class="btn" type="button" id="xls">Отчёт Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     ${t.source === 'intake' ? `<div class="card intake-hd st-${ist[0]}"><div><b>Приёмка товара</b>${t.intake_brand ? ` · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand)}</b>` : ''} ·
         ${t.finished_at ? `<span>передано завскладу ${fmtDate(t.finished_at)}</span>` : '<span>фотограф ещё снимает</span>'}
         <div class="ih-st">${ist[0] === 'ok' ? `<b>Данные для 1С проверены</b>${verLast ? ` · <span data-noi18n>${esc(verLast.verified_by || '')}</span>, ${fmtDate(verLast.verified_at)}` : ''}`
@@ -1168,8 +1188,9 @@ async function viewTask(id) {
   $('#xls').onclick = async () => {
     const b = $('#xls'); b.disabled = true; b.textContent = 'Готовлю…';
     try { exportTaskXlsx(await loadTask(id)); } catch (e) { toast(e.message); }
-    b.disabled = false; b.textContent = 'Скачать Excel';
+    b.disabled = false; b.textContent = 'Отчёт Excel';
   };
+  $('#x1c').onclick = () => openExport(id).catch(e => toast(e.message));
   loadPhotographers().then(dd => {
     const sel = $('#t-ph'); if (!sel) return;
     const list = (dd.photographers || []).slice();
@@ -1189,6 +1210,118 @@ async function viewTask(id) {
   draw();
 }
 
+// ─── Выгрузка в 1С ────────────────────────────────────────
+// Формат от Зеніт-Авто: Excel без заголовков, колонки «код 1С» и «ссылка на фото» на их сервере;
+// файлы nw_Бренд_Артикул_N.jpg, N = 1 — главное фото. Все фото — 1024×683 (белые поля, ничего не обрезаем).
+// Какие фото и какое главное — выбирается в карточке товара; по умолчанию все, кроме этикетки (фото № 1).
+const EXP_W = 1024, EXP_H = 683;
+const expSet = (() => { let x = {}; try { x = JSON.parse(localStorage.getItem('zf_export') || '{}') || {}; } catch (_) {} return Object.assign({ base: 'http://data.za.kh.ua/akfyvpds', variant: 'web', onlyVerified: true }, x); })();
+const saveExpSet = () => { try { localStorage.setItem('zf_export', JSON.stringify(expSet)); } catch (_) {} };
+const expCfg = {};         // task_id → { item_id: [photo_uid…] } — явный выбор администратора
+async function loadExpCfg(taskId, force) {
+  if (!expCfg[taskId] || force) { try { expCfg[taskId] = (await api('/photo/admin/export-cfg?task_id=' + num(taskId))).items || {}; } catch (_) { expCfg[taskId] = expCfg[taskId] || {}; } }
+  return expCfg[taskId];
+}
+const stored = it => (it.photos || []).filter(p => p.file_url && p.status === 'stored').sort((a, b) => num(a.photo_index) - num(b.photo_index));
+// фото товара для 1С по порядку: [главное, остальные по номеру]
+function expList(it, cfg) {
+  const ph = stored(it), sel = cfg && cfg[String(it.id)];
+  if (Array.isArray(sel) && sel.length) return sel.map(u => ph.find(p => p.photo_uid === u)).filter(Boolean);
+  return ph.length > 1 ? ph.slice(1) : ph;          // по умолчанию без этикетки
+}
+const expPart = v => String(v || '').trim().replace(/[\s\/\\.]+/g, '').replace(/[^0-9A-Za-z-]/g, '');
+const expName = (it, n) => `nw_${expPart(it.brand)}_${expPart(it.article)}_${n}.jpg`;
+const expSrc = (u, v) => cld(v === 'web' ? webUrl(u) : v === 'light' ? lightUrl(u) : u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
+const expSrcOrig = u => cld(u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
+async function openExport(taskId) {
+  const d = await loadTask(taskId), cfg = await loadExpCfg(taskId, true);
+  let ver = {};
+  if (d.task.source === 'intake') { try { ((await api('/photo/admin/intake?task_id=' + num(taskId))).items || []).forEach(i => { if (i.verified_at) ver[num(i.id)] = true; }); } catch (_) {} }
+  const today = new Date(), ymdS = '' + today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+  const ov = document.createElement('div'); ov.className = 'xov';
+  ov.innerHTML = `<div class="card xbox" role="dialog" aria-modal="true" aria-labelledby="x-ttl">
+    <div class="bar" style="justify-content:space-between"><h2 id="x-ttl" style="margin:0;font-size:18px">Выгрузка в 1С</h2><button class="btn sm" type="button" id="x-close">Закрыть</button></div>
+    <div class="mu" style="font-size:13px">Excel без заголовков: код 1С и ссылка на фото. Фото ${EXP_W}×${EXP_H}, имена nw_Бренд_Артикул_N.jpg, № 1 — главное.</div>
+    <label class="stack" style="gap:4px"><span class="mu">Адрес папки на сервере</span><input class="in mono" id="x-base" value="${esc(expSet.base)}"></label>
+    <label class="stack" style="gap:4px"><span class="mu">Папка партии</span><input class="in mono" id="x-folder" value="${esc(ymdS + '_1')}"></label>
+    <label class="stack" style="gap:4px"><span class="mu">Версия фото</span><select class="in" id="x-var">
+      ${[['web', 'Белый фон'], ['light', 'Засветка'], ['orig', 'Оригинал']].map(([k, l]) => `<option value="${k}"${k === expSet.variant ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${d.task.source === 'intake' ? `<label class="bar"><input type="checkbox" id="x-ver"${expSet.onlyVerified ? ' checked' : ''}> <span>Только проверенные товары</span></label>` : ''}
+    <div class="note" id="x-sum"></div>
+    <div class="bar"><button class="btn" type="button" id="x-xls">Скачать Excel</button><button class="btn pri" type="button" id="x-zip">Скачать архив: фото + Excel</button></div>
+    <div class="mu" id="x-prog" style="font-size:13px"></div></div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  $('#x-close').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
+  const plan = () => {
+    const onlyV = d.task.source === 'intake' && $('#x-ver') && $('#x-ver').checked;
+    const out = [], skip = { code: 0, photo: 0, ver: 0 };
+    (d.items || []).forEach(it => {
+      if (onlyV && !ver[num(it.id)]) { skip.ver++; return; }
+      const list = expList(it, cfg);
+      if (!list.length) { skip.photo++; return; }
+      if (!it.code_1c || isTmpCode(it.code_1c)) { skip.code++; return; }
+      list.forEach((p, k) => out.push({ it, p, name: expName(it, k + 1) }));
+    });
+    return { out, skip, items: new Set(out.map(x => x.it.id)).size };
+  };
+  const sum = () => {
+    const { out, skip, items } = plan();
+    $('#x-sum').innerHTML = `<b>Товаров: ${items}, фото: ${out.length}</b>`
+      + (skip.code ? `<div>Пропущено без кода 1С: ${skip.code}</div>` : '') + (skip.photo ? `<div>Пропущено без фото: ${skip.photo}</div>` : '')
+      + (skip.ver ? `<div>Пропущено непроверенных: ${skip.ver}</div>` : '');
+  };
+  ov.querySelectorAll('input, select').forEach(el => el.addEventListener('change', sum));
+  sum();
+  const opts = () => {
+    expSet.base = $('#x-base').value.trim().replace(/\/+$/, ''); expSet.variant = $('#x-var').value;
+    if ($('#x-ver')) expSet.onlyVerified = $('#x-ver').checked;
+    saveExpSet();
+    return { base: expSet.base, folder: $('#x-folder').value.trim().replace(/[^0-9A-Za-z_-]/g, '') || ymdS + '_1', v: expSet.variant };
+  };
+  const sheet = (rows, o) => {
+    const ws = XLSX.utils.aoa_to_sheet(rows.map(r => [r.it.code_1c, `${o.base}/${o.folder}/${r.name}`]));
+    ws['!cols'] = [{ wch: 14 }, { wch: 80 }];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, o.folder.slice(0, 31));
+    return wb;
+  };
+  $('#x-xls').onclick = () => {
+    const o = opts(), { out } = plan();
+    if (!out.length) { toast('Нечего выгружать'); return; }
+    XLSX.writeFile(sheet(out, o), o.folder + '.xlsx');
+  };
+  $('#x-zip').onclick = async () => {
+    const o = opts(), { out } = plan();
+    if (!out.length) { toast('Нечего выгружать'); return; }
+    const btns = ov.querySelectorAll('button'); btns.forEach(b => b.disabled = true);
+    const pr = $('#x-prog');
+    try {
+      if (!window.JSZip) await new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'; sc.onload = ok; sc.onerror = () => bad(new Error('Не загрузилась библиотека архива')); document.head.appendChild(sc); });
+      const zip = new JSZip(), dir = zip.folder(o.folder);
+      let done = 0, fails = [];
+      const get = async u => { const r = await fetch(u); if (!r.ok) throw new Error(r.status); return r.blob(); };
+      const queue = out.slice();
+      const worker = async () => {
+        while (queue.length) {
+          const x = queue.shift(); let blob = null;
+          try { blob = await get(expSrc(x.p.file_url, o.v)); } catch (_) { try { blob = await get(expSrcOrig(x.p.file_url)); } catch (_) { fails.push(x.name); } }
+          if (blob) dir.file(x.name, blob);
+          done++; pr.textContent = 'Фото ' + done + ' из ' + out.length;
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+      const wbout = XLSX.write(sheet(out.filter(x => !fails.includes(x.name)), o), { bookType: 'xlsx', type: 'array' });
+      zip.file(o.folder + '.xlsx', wbout);
+      pr.textContent = 'Собираю архив…';
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = o.folder + '.zip'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      pr.innerHTML = fails.length ? `<span>Готово. Не скачались фото: ${fails.length}</span> <span class="mono" data-noi18n>${esc(fails.join(', '))}</span>` : '<span>Готово</span>';
+    } catch (e) { pr.textContent = e.message; }
+    btns.forEach(b => b.disabled = false);
+  };
+}
+
 // ─── Карточка товара ──────────────────────────────────────
 async function viewItem(taskId, itemId) {
   navOn('tasks');
@@ -1198,6 +1331,8 @@ async function viewItem(taskId, itemId) {
   if (!it) return showError(new Error('Товар не найден в задании'));
   const photos = (it.photos || []).filter(p => p.file_url);
   const n = photos.length;
+  const cfg = await loadExpCfg(taskId);
+  const xl = expList(it, cfg), xpos = uid => xl.findIndex(p => p.photo_uid === uid);
   // соседи по тому же списку, что в задании (вкладка, поиск, порядок); если товара в нём нет — по всем товарам
   let nav = taskVisible(d.items || []);
   if (!nav.some(i => num(i.id) === num(it.id))) nav = taskVisible(d.items || [], true);
@@ -1218,6 +1353,7 @@ async function viewItem(taskId, itemId) {
         <div class="bar" style="justify-content:space-between;margin-bottom:10px"><b>Фото · ${n}</b>
           <span class="tabs" style="margin:0;border:0" role="group" aria-label="Версия фото"><button type="button" data-bg="orig" class="${bgMode === 'orig' ? 'on' : ''}">Оригинал</button><button type="button" data-bg="web" class="${bgMode === 'web' ? 'on' : ''}">Белый фон</button><button type="button" data-bg="light" class="${bgMode === 'light' ? 'on' : ''}">Засветка</button></span></div>
         <div class="mu" style="margin:-4px 0 10px;font-size:12.5px">минимум ${MIN_PHOTOS}, максимум ${MAX_PHOTOS} · первое — этикетка коробки · белый фон и засветка делаются автоматически через несколько секунд после загрузки</div>
+        ${n ? `<div class="mu x1c-sum">${xl.length ? `<span>Для 1С: ${xl.length} фото, главное —</span> <span class="mono">${esc(expName(it, 1))}</span>` : '<span>Для 1С фото не выбраны</span>'}${cfg[String(it.id)] ? ' · <button type="button" class="btn sm" id="x-reset">Как по умолчанию</button>' : ''}</div>` : ''}
         ${n < MIN_PHOTOS ? `<div class="note">${n ? 'Снято ' + n + ' из минимум ' + MIN_PHOTOS : 'Фото ещё нет'}.</div>` : ''}
         ${n ? `<div class="gal">${photos.map((p, k) => `
           <figure class="${k === 0 ? 'first' : ''}" data-k="${k}" tabindex="0" role="button" aria-label="Открыть фото ${esc(p.file_name)}">
@@ -1225,7 +1361,9 @@ async function viewItem(taskId, itemId) {
             <figcaption><span class="fn" title="${esc(p.file_name)}">${esc(p.file_name)}</span>
               <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
               ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}
-              <span class="noweb" hidden><span class="pill">${bgMode === 'light' ? 'засветки нет' : 'белого фона нет'}</span></span></figcaption>
+              <span class="noweb" hidden><span class="pill">${bgMode === 'light' ? 'засветки нет' : 'белого фона нет'}</span></span>
+              ${p.status === 'stored' ? `<span class="x1c"><label><input type="checkbox" data-xin="${esc(p.photo_uid)}"${xpos(p.photo_uid) >= 0 ? ' checked' : ''}> <span>в 1С</span></label>
+                ${xpos(p.photo_uid) === 0 ? '<span class="pill ok">главное</span>' : xpos(p.photo_uid) > 0 ? `<button type="button" class="btn sm" data-xmain="${esc(p.photo_uid)}">Сделать главным</button>` : ''}</span>` : ''}</figcaption>
           </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
       </div>
       <div class="card">
@@ -1266,6 +1404,21 @@ async function viewItem(taskId, itemId) {
     bgMode = b.dataset.bg; try { localStorage.setItem('zf-bg', bgMode); } catch (_) {}
     viewItem(taskId, itemId);
   });
+  // выбор фото для 1С: [главное, остальные по номеру фото]
+  const saveX = async uids => {
+    try { await api('/photo/admin/export-set', { method: 'POST', body: { item_id: num(it.id), uids } }); await loadExpCfg(taskId, true); viewItem(taskId, itemId); }
+    catch (e) { toast(e.message); }
+  };
+  const order = (main, set) => { const rest = stored(it).filter(p => set.has(p.photo_uid) && p.photo_uid !== main).map(p => p.photo_uid); return main && set.has(main) ? [main, ...rest] : rest; };
+  view.querySelectorAll('[data-xin]').forEach(c => { c.onclick = e => e.stopPropagation(); c.onchange = () => {
+    const set = new Set(xl.map(p => p.photo_uid)); c.checked ? set.add(c.dataset.xin) : set.delete(c.dataset.xin);
+    if (!set.size) { toast('Оставьте хотя бы одно фото для 1С'); c.checked = true; return; }
+    const main = xl[0] && set.has(xl[0].photo_uid) ? xl[0].photo_uid : null;
+    saveX(order(main, set));
+  }; });
+  view.querySelectorAll('[data-xmain]').forEach(b => b.onclick = e => { e.stopPropagation(); saveX(order(b.dataset.xmain, new Set(xl.map(p => p.photo_uid)))); });
+  view.querySelectorAll('.x1c label').forEach(l => l.onclick = e => e.stopPropagation());
+  if ($('#x-reset')) $('#x-reset').onclick = () => saveX([]);
   view.querySelectorAll('figure[data-k]').forEach(f => {
     f.onclick = () => openLB(photos, +f.dataset.k);
     f.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLB(photos, +f.dataset.k); } };
@@ -2003,7 +2156,7 @@ function drawTheme() {
   b.innerHTML = dark
     ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
     : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
-  b.setAttribute('aria-label', I18N.t(dark ? 'Светлая тема' : 'Тёмная тема')); b.title = b.getAttribute('aria-label');
+  b.setAttribute('aria-label', dark ? 'Светлая тема' : 'Тёмная тема'); b.title = dark ? 'Светлая тема' : 'Тёмная тема';
 }
 $('#theme').onclick = () => {
   const dark = document.documentElement.dataset.theme !== 'dark';
