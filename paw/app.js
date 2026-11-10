@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v19';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -238,7 +238,7 @@ Object.assign(I18N_UK, {
   'Включить уведомления о новых заданиях': 'Увімкнути сповіщення про нові завдання',
   'Уведомления включены, пока приложение открыто': 'Сповіщення ввімкнено, поки застосунок відкритий',
   // ── окно «Настройки» (v12) ──
-  'Настройки': 'Налаштування', 'Язык': 'Мова', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
+  'Настройки': 'Налаштування', 'Язык': 'Мова', 'Тема': 'Тема', 'Светлая': 'Світла', 'Тёмная': 'Темна', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
   'Обновить приложение': 'Оновити застосунок', 'Новый товар без Excel': 'Новий товар без Excel',
   'Ищу код в связках…': 'Шукаю код у зв’язках…', 'Найдено по связке кода': 'Знайдено за зв’язкою коду', 'По связке это:': 'За зв’язкою це:',
   'Запомнить код для этого товара?': 'Запам’ятати код для цього товару?', 'В следующий раз коробка найдётся сканером': 'Наступного разу коробку знайде сканер',
@@ -625,6 +625,7 @@ const ICONS = {
   box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
   tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
 const icon = (name, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
@@ -1664,6 +1665,7 @@ function openSettings() {
     <div class="sheet-m" role="dialog" aria-modal="true" aria-labelledby="set-ttl" tabindex="-1">
       <div class="sheet-hd"><b id="set-ttl">Настройки</b><button class="icb" type="button" id="set-x" aria-label="Закрыть">${icon('close', 22)}</button></div>
       <div class="set-sec"><div class="set-lbl">${icon('globe', 18)}<span>Язык</span></div><span class="lsw" data-lang-switch></span></div>
+      <div class="set-sec"><div class="set-lbl">${icon('sun', 18)}<span>Тема</span></div><span class="lsw" id="set-theme"><button type="button" data-th="light">Светлая</button><button type="button" data-th="dark">Тёмная</button></span></div>
       <div class="set-sec col"><div class="set-lbl">${icon('bell', 18)}<span>Уведомления</span></div><div id="push-box" style="width:100%"></div></div>
       <div class="set-sec"><div class="set-lbl">${icon('phone', 18)}<span>Версия приложения</span></div><b class="mono">${APP_VERSION}</b></div>
       <button class="btn" type="button" id="set-reload">${icon('refresh', 18)}<span>Обновить приложение</span></button>
@@ -1683,6 +1685,13 @@ function openSettings() {
   settingsEsc = e => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', settingsEsc);
   I18N.drawSwitches();
+  const th = () => { const d = document.documentElement.dataset.theme === 'dark'; m.querySelectorAll('[data-th]').forEach(b => b.classList.toggle('on', (b.dataset.th === 'dark') === d)); };
+  m.querySelectorAll('[data-th]').forEach(b => b.onclick = () => {
+    if (b.dataset.th === 'dark') document.documentElement.dataset.theme = 'dark'; else delete document.documentElement.dataset.theme;
+    try { localStorage.setItem('zf_theme', b.dataset.th); } catch (_) {}
+    th();
+  });
+  th();
   Push.draw();
   requestAnimationFrame(() => { m.classList.add('on'); m.querySelector('.sheet-m').focus(); });
 }
