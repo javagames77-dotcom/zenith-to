@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -235,7 +235,7 @@ Object.assign(I18N_UK, {
   'Уведомления включены, пока приложение открыто': 'Сповіщення ввімкнено, поки застосунок відкритий',
   // ── окно «Настройки» (v12) ──
   'Настройки': 'Налаштування', 'Язык': 'Мова', 'Уведомления': 'Сповіщення', 'Версия приложения': 'Версія застосунку',
-  'Обновить приложение': 'Оновити застосунок',
+  'Обновить приложение': 'Оновити застосунок', 'Новый товар без Excel': 'Новий товар без Excel',
   '(на этом устройстве нет службы push)': '(на цьому пристрої немає служби push)', 'Включаю…': 'Вмикаю…', 'Уведомления включены': 'Сповіщення ввімкнено',
   'Уведомления запрещены. Разрешите их для этого приложения в настройках телефона.': 'Сповіщення заборонено. Дозвольте їх для цього застосунку в налаштуваннях телефона.',
   'Чтобы получать уведомления на iPhone, откройте сайт в Safari → «Поделиться» → «На экран „Домой“» и запускайте приложение с иконки.':
@@ -590,6 +590,7 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
 const icon = (name, size = 20) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
@@ -666,8 +667,10 @@ async function viewTasks() {
           <span class="n">${[t.file_name].filter(Boolean).map(esc).join(' · ')}</span>
           <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
       }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; товар с приёмки можно добавить кнопкой ниже.</div>'}
-      <button class="btn" type="button" id="add-new">+ Новый товар без Excel</button>
-      <button class="btn" type="button" id="refresh">Обновить</button>
+    </div>
+    <div class="fabs">
+      <button class="fab sm" type="button" id="refresh" aria-label="Обновить" title="Обновить">${icon('refresh', 22)}</button>
+      <button class="fab" type="button" id="add-new" aria-label="Новый товар без Excel" title="Новый товар без Excel">${icon('plus', 28)}</button>
     </div>`;
   $('#refresh').onclick = viewTasks;
   $('#add-new').onclick = () => { location.hash = '#add'; };
