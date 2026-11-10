@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v17';
+const APP_VERSION = 'v18';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -250,7 +250,7 @@ Object.assign(I18N_UK, {
   'Читаю штрихкод…': 'Читаю штрихкод…', 'Бренд и название распознаются автоматически, 3–10 секунд': 'Бренд і назва розпізнаються автоматично, 3–10 секунд',
   'Этот товар уже в приёмке — открываю': 'Цей товар уже в прийманні — відкриваю', 'Штрихкод не найден. Читаю этикетку…': 'Штрихкод не знайдено. Читаю етикетку…',
   'Этот снимок станет фото № 1': 'Цей знімок стане фото № 1',
-  'по похожим артикулам — проверьте': 'за схожими артикулами — перевірте', 'новый бренд с этикетки — проверьте': 'новий бренд з етикетки — перевірте',
+  'по похожим артикулам — проверьте': 'за схожими артикулами — перевірте', 'от прошлого товара — проверьте': 'від попереднього товару — перевірте', 'новый бренд с этикетки — проверьте': 'новий бренд з етикетки — перевірте',
   'этикетка не распознана — проверьте': 'етикетку не розпізнано — перевірте', 'не распознан — проверьте': 'не розпізнано — перевірте',
   'совпал с этикеткой': 'збігся з етикеткою', 'прочитан с этикетки — проверьте': 'прочитано з етикетки — перевірте', 'на этикетке:': 'на етикетці:',
   'по истории артикула': 'за історією артикула', 'с этикетки': 'з етикетки', 'Номер производителя:': 'Номер виробника:', 'Здесь пусто': 'Тут порожньо',
@@ -990,7 +990,7 @@ async function readLabel(taskId, file) {
   const st = t => { const el = $('#lb-st'); if (el) el.textContent = t; };
   const d = S.task[taskId] || await loadTask(taskId).catch(() => null);
   let codes = [];
-  try { const c = await scaled(file, 2400); codes = await readCodes(c.getContext('2d').getImageData(0, 0, c.width, c.height)); } catch (_) {}
+  try { codes = await labelCodes(file); } catch (_) {}
   if (readLabel.cur !== my) return;
   // эта коробка уже есть в приёмке — открываем её, снимок не нужен
   const ex = d && codes.length ? matchAny(d.items || [], codes) : null;
@@ -1013,6 +1013,27 @@ async function readLabel(taskId, file) {
   if (ex2) { URL.revokeObjectURL(url); toast('Этот товар уже в приёмке — открываю'); location.hash = `#item-${num(taskId)}-${num(ex2.id)}`; return; }
   labelShot = { taskId: num(taskId), file, url, ai, article };
   location.hash = '#addi-' + num(taskId) + '-' + encodeURIComponent((ai && ai.article) || article);
+}
+// штрихкод на снимке: мелкий и за бликующим пакетом читается не сразу — пробуем несколько вариантов, до первого успеха
+async function labelCodes(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const W = bmp.width, H = bmp.height;
+  const read = async (sx, sy, sw, sh, max, min) => {
+    let k = Math.min(1, max / Math.max(sw, sh));
+    if (min && Math.max(sw, sh) * k < min) k = min / Math.max(sw, sh);          // маленький кусок — увеличиваем
+    const c = document.createElement('canvas'); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return readCodes(x.getImageData(0, 0, c.width, c.height));
+  };
+  let r = await read(0, 0, W, H, 2400);
+  if (!r.length && Math.max(W, H) > 2400) r = await read(0, 0, W, H, 4000);
+  // куски 60 % × 45 % с перекрытием: штрихкод в одном из них становится крупнее
+  const cw = W * 0.6, ch = H * 0.45;
+  for (const [fx, fy] of [[0.2, 0.275], [0, 0], [0.4, 0], [0, 0.275], [0.4, 0.275], [0, 0.55], [0.4, 0.55]]) {
+    if (r.length) break;
+    r = await read(W * fx, H * fy, cw, ch, 2000, 1400);
+  }
+  return r;
 }
 async function queueLabelPhoto(taskId, itemId, file) {     // снимок этикетки — фото № 1, тем же путём, что «Снять фото»
   let b64;
@@ -1044,13 +1065,14 @@ async function viewAddIntake(taskId, code) {
   const pre = addPrefill || {}; addPrefill = null;
   let last = ''; try { last = localStorage.getItem('zf-brand') || ''; } catch (_) {}
   const brand = ai.brand || pre.brand || d.task.intake_brand || lastTaskBrand(d) || last;
+  const brandGuess = !ai.brand && !pre.brand && !d.task.intake_brand && !!brand;     // взят от прошлого товара — может быть чужим
   const name = ai.name || pre.name || '';
   const code1c = ai.code_1c || pre.code_1c || '';
   const bNote = {
     history: ['по истории артикула', ''], label: ['с этикетки', ''],
     prefix: ['по похожим артикулам — проверьте', 'need'], label_new: ['новый бренд с этикетки — проверьте', 'need'],
     none: [shot && !shot.ai ? 'этикетка не распознана — проверьте' : 'не распознан — проверьте', 'need']
-  }[ai.brand_source || (shot ? 'none' : '')] || ['', ''];
+  }[ai.brand_source || (shot ? 'none' : '')] || (brandGuess ? ['от прошлого товара — проверьте', 'need'] : ['', '']);
   const aNote = ai.article_check === 'confirmed' ? ['совпал с этикеткой', ''] : ai.article_check === 'label' ? ['прочитан с этикетки — проверьте', 'need'] : ['', ''];
   const chips = [...new Set([brand, ai.brand_label && ai.brand_conflict ? ai.brand_label : '', lastTaskBrand(d), last].filter(Boolean))].slice(0, 4);
   app.innerHTML = `
