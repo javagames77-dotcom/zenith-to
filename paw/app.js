@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -134,6 +134,7 @@ const I18N_UK = {
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
 const I18N_RX = [
+  [/^Штрихкод: (.+)\. Читаю этикетку…$/, m => `Штрихкод: ${m[1]}. Читаю етикетку…`],
   [/^Приёмка товара (.+)$/, m => `Приймання товару ${m[1]}`],
   [/^Не сняты товаров: (\d+)\. Всё равно передать приёмку завскладу\?$/, m => `Не знято товарів: ${m[1]}. Усе одно передати приймання завскладу?`],
   [/^Показать ещё · осталось (\d+)$/, m => `Показати ще · залишилось ${m[1]}`],
@@ -243,7 +244,16 @@ Object.assign(I18N_UK, {
   'Запомнить код для этого товара?': 'Запам’ятати код для цього товару?', 'В следующий раз коробка найдётся сканером': 'Наступного разу коробку знайде сканер',
   'Запомнить': 'Запам’ятати', 'Не надо': 'Не треба', 'Код запомнен': 'Код запам’ятовано',
   'Нет связи — код не запомнен, попробуйте позже': 'Немає зв’язку — код не запам’ятовано, спробуйте пізніше', 'Не удалось запомнить код': 'Не вдалося запам’ятати код',
-  'Приёмка': 'Приймання', 'Новая приёмка': 'Нове приймання', 'Здесь пусто': 'Тут порожньо',
+  'Приёмка': 'Приймання', 'Новая приёмка': 'Нове приймання',
+  'Приёмка начата — снимайте этикетку первой коробки': 'Приймання почато — знімайте етикетку першої коробки',
+  'Снять этикетку — следующий товар': 'Зняти етикетку — наступний товар', 'Сканировать штрихкод': 'Сканувати штрихкод', 'Этикетка': 'Етикетка',
+  'Читаю штрихкод…': 'Читаю штрихкод…', 'Бренд и название распознаются автоматически, 3–10 секунд': 'Бренд і назва розпізнаються автоматично, 3–10 секунд',
+  'Этот товар уже в приёмке — открываю': 'Цей товар уже в прийманні — відкриваю', 'Штрихкод не найден. Читаю этикетку…': 'Штрихкод не знайдено. Читаю етикетку…',
+  'Этот снимок станет фото № 1': 'Цей знімок стане фото № 1',
+  'по похожим артикулам — проверьте': 'за схожими артикулами — перевірте', 'новый бренд с этикетки — проверьте': 'новий бренд з етикетки — перевірте',
+  'этикетка не распознана — проверьте': 'етикетку не розпізнано — перевірте', 'не распознан — проверьте': 'не розпізнано — перевірте',
+  'совпал с этикеткой': 'збігся з етикеткою', 'прочитан с этикетки — проверьте': 'прочитано з етикетки — перевірте', 'на этикетке:': 'на етикетці:',
+  'по истории артикула': 'за історією артикула', 'с этикетки': 'з етикетки', 'Номер производителя:': 'Номер виробника:', 'Здесь пусто': 'Тут порожньо',
   'Бренд для всех товаров приёмки. Если попадётся другой — поменяете при добавлении товара.': 'Бренд для всіх товарів приймання. Якщо трапиться інший — зміните під час додавання товару.',
   'Бренд, например KAP': 'Бренд, наприклад KAP', 'Начать приёмку': 'Почати приймання', 'Выберите или введите бренд': 'Оберіть або введіть бренд',
   'Нет сети. Начать приёмку можно только онлайн': 'Немає мережі. Почати приймання можна лише онлайн',
@@ -613,6 +623,7 @@ const ICONS = {
   right: '<path d="m9 18 6-6-6-6"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
 };
@@ -723,8 +734,9 @@ async function viewTask(id) {
         <div class="count"><span class="mu">Снято товаров</span><b>${done} / ${items.length}</b></div>
         <div class="prog" style="margin-top:8px"><i style="width:${items.length ? Math.round(done / items.length * 100) : 0}%"></i></div>
       </div>
-      ${d.task.source === 'intake' ? `<div class="intake-bar">${icon('box', 18)}<span>Приёмка · бренд <b data-noi18n>${esc(d.task.intake_brand || '—')}</b></span>${d.task.finished_at ? '<span class="pill ok">Передано завскладу</span>' : ''}</div>` : ''}
-      <button class="btn pri big" type="button" id="scan">Сканировать коробку</button>
+      ${d.task.source === 'intake' ? `<div class="intake-bar">${icon('box', 18)}<span>Приёмка</span>${d.task.intake_brand ? `<span class="mu">·</span><b data-noi18n>${esc(d.task.intake_brand)}</b>` : ''}${d.task.finished_at ? '<span class="pill ok">Передано завскладу</span>' : ''}</div>
+      <button class="btn pri big" type="button" id="label">${icon('tag', 20)}<span>Снять этикетку — следующий товар</span></button>
+      <button class="btn" type="button" id="scan">Сканировать штрихкод</button>` : '<button class="btn pri big" type="button" id="scan">Сканировать коробку</button>'}
       <input class="in" id="search" type="search" placeholder="Артикул, код 1С или название" value="${esc(taskSearch)}" aria-label="Поиск товара" autocomplete="off">
       <div class="chips" role="tablist">
         <button type="button" data-f="todo">Не сняты ${items.filter(i => i.status === 'todo').length}</button>
@@ -741,6 +753,7 @@ async function viewTask(id) {
       ${d.task.source === 'intake' && !d.task.finished_at && items.length ? '<button class="btn" type="button" id="finish">Завершить приёмку — передать завскладу</button>' : ''}
     </div>`;
   if ($('#finish')) $('#finish').onclick = () => finishIntake(id, items);
+  if ($('#label')) $('#label').onclick = () => shootLabel(id);
   const body = $('#items');
   let shown = TASK_PAGE;
   function draw(more) {
@@ -881,7 +894,8 @@ async function setStatus(taskId, it, status, n) {
     vibrate([20, 40, 20]);
     toast(status === 'done' ? 'Готово: ' + it.article : 'Отмечено: нет на приёмке');
     const intake = S.task[taskId] && S.task[taskId].task && S.task[taskId].task.source === 'intake';
-    location.hash = (intake && status === 'done' ? '#scan-' : '#task-') + taskId;     // приёмка: следующая коробка
+    location.hash = '#task-' + taskId;     // в приёмке там сразу «Снять этикетку — следующий товар»
+    void intake;
   } catch (e) {
     btns.forEach(b => b.disabled = false);
     toast(e.offline ? 'Нет сети. Фото сохранены, отметьте «Готово», когда появится связь' : e.message, 4000);
@@ -929,55 +943,88 @@ function viewAdd(prefill) {
 // Фотограф начинает приёмку (бренд один на всю приёмку), сканирует коробки и снимает.
 // Чего нет в приёмке — сразу карточка нового товара: артикул из штрихкода, бренд приёмки. Данные проверяет завскладом в админке.
 let addPrefill = null;     // данные из связки кода для формы нового товара
-async function openIntakeStart() {
-  closeSettings();
-  let last = '';
-  try { last = localStorage.getItem('zf-brand') || ''; } catch (_) {}
-  const m = document.createElement('div');
-  m.className = 'modal'; m.id = 'settings';
-  m.innerHTML = `
-    <div class="sheet-m" role="dialog" aria-modal="true" aria-labelledby="in-ttl" tabindex="-1">
-      <div class="sheet-hd"><b id="in-ttl">Новая приёмка</b><button class="icb" type="button" id="in-x" aria-label="Закрыть">${icon('close', 22)}</button></div>
-      <div class="mu" style="font-size:13.5px">Бренд для всех товаров приёмки. Если попадётся другой — поменяете при добавлении товара.</div>
-      <div class="chips" id="in-brands"></div>
-      <input class="in" id="in-brand" value="${esc(last)}" placeholder="Бренд, например KAP" autocomplete="off" aria-label="Бренд">
-      <button class="btn pri big" type="button" id="in-go">Начать приёмку</button>
-    </div>`;
-  document.body.appendChild(m);
-  document.body.classList.add('modal-on');
-  const close = () => closeSettings();
-  m.onclick = e => { if (e.target === m) close(); };
-  $('#in-x').onclick = close;
-  settingsEsc = e => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', settingsEsc);
-  const drawChips = list => {
-    const box = $('#in-brands'); if (!box) return;
-    box.innerHTML = list.map(b => `<button type="button" data-b="${esc(b)}" data-noi18n>${esc(b)}</button>`).join('');
-    box.querySelectorAll('[data-b]').forEach(c => c.onclick = () => { $('#in-brand').value = c.dataset.b; mark(); });
-    mark();
-  };
-  const mark = () => { const v = $('#in-brand').value.trim(); $('#in-brands').querySelectorAll('[data-b]').forEach(c => c.classList.toggle('on', c.dataset.b === v)); };
-  $('#in-brand').oninput = mark;
-  drawChips(last ? [last] : []);
-  api('/photo/intake-brands').then(r => {
-    const list = [...new Set([r.last, last, ...(r.brands || [])].filter(Boolean))].slice(0, 8);
-    if (!$('#in-brand').value && r.last) $('#in-brand').value = r.last;
-    drawChips(list);
-  }).catch(() => {});
-  $('#in-go').onclick = async () => {
-    const brand = $('#in-brand').value.trim();
-    if (!brand) { toast('Выберите или введите бренд'); $('#in-brand').focus(); return; }
-    const b = $('#in-go'); b.disabled = true;
-    try {
-      const r = await api('/photo/intake-start', { method: 'POST', body: { brand } });
-      try { localStorage.setItem('zf-brand', brand); } catch (_) {}
-      close(); S.tasks = null;
-      await loadTask(r.task_id);
-      location.hash = '#task-' + num(r.task_id);
-    } catch (e) { b.disabled = false; toast(e.offline ? 'Нет сети. Начать приёмку можно только онлайн' : e.message, 4000); }
-  };
-  requestAnimationFrame(() => { m.classList.add('on'); m.querySelector('.sheet-m').focus(); });
+async function openIntakeStart() {        // бренд не спрашиваем: его возьмёт распознавание этикетки
+  const fab = $('#add-new'); if (fab) fab.disabled = true;
+  try {
+    const r = await api('/photo/intake-start', { method: 'POST', body: {} });
+    S.tasks = null;
+    await loadTask(r.task_id);
+    toast('Приёмка начата — снимайте этикетку первой коробки');
+    location.hash = '#task-' + num(r.task_id);
+  } catch (e) { if (fab) fab.disabled = false; toast(e.offline ? 'Нет сети. Начать приёмку можно только онлайн' : e.message, 4000); }
 }
+// ─── Этикетка: одно фото → артикул (штрихкод на телефоне) + бренд и название (ИИ на сервере) ──
+// Снимок этикетки потом становится фото № 1 товара: лишнего кадра нет.
+let labelShot = null;      // { taskId, file, ai }
+function shootLabel(taskId) {
+  const cam = $('#cam');
+  cam.value = '';
+  cam.onchange = async () => {
+    const file = cam.files && cam.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast(file.type === 'image/heic' || file.type === 'image/heif'
+        ? 'Фото в HEIC. На iPhone: Настройки → Камера → Форматы → «Наиболее совместимый»'
+        : 'Нужен JPEG или PNG, получено: ' + (file.type || 'неизвестный формат'), 5000);
+      return;
+    }
+    readLabel(taskId, file);
+  };
+  cam.click();
+}
+const scaled = async (file, max, q) => {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return c;
+};
+async function readLabel(taskId, file) {
+  const my = 'label-' + Date.now(); readLabel.cur = my;
+  const url = URL.createObjectURL(file);
+  header({ back: '#task-' + taskId, title: 'Этикетка' });
+  if ($('#back')) $('#back').onclick = () => { readLabel.cur = null; viewTask(taskId); };     // отмена: остаёмся в приёмке
+  app.innerHTML = `<div class="stack"><img class="lbl-prev" src="${url}" alt="">
+    <div class="card" style="text-align:center"><div class="spin" aria-hidden="true">${icon('refresh', 22)}</div><b id="lb-st">Читаю штрихкод…</b>
+    <div class="mu" style="font-size:13px">Бренд и название распознаются автоматически, 3–10 секунд</div></div></div>`;
+  const st = t => { const el = $('#lb-st'); if (el) el.textContent = t; };
+  const d = S.task[taskId] || await loadTask(taskId).catch(() => null);
+  let codes = [];
+  try { const c = await scaled(file, 2400); codes = await readCodes(c.getContext('2d').getImageData(0, 0, c.width, c.height)); } catch (_) {}
+  if (readLabel.cur !== my) return;
+  // эта коробка уже есть в приёмке — открываем её, снимок не нужен
+  const ex = d && codes.length ? matchAny(d.items || [], codes) : null;
+  if (ex) { URL.revokeObjectURL(url); toast('Этот товар уже в приёмке — открываю'); location.hash = `#item-${num(taskId)}-${num(ex.id)}`; return; }
+  const cand = codes.length ? codeCandidates(codes[0]) : [];
+  const article = cand[cand.length - 1] || codes[0] || '';
+  st(codes.length ? 'Штрихкод: ' + article + '. Читаю этикетку…' : 'Штрихкод не найден. Читаю этикетку…');
+  let ai = null;
+  try {
+    const c = await scaled(file, 1600);
+    const image = c.toDataURL('image/jpeg', 0.85).split(',')[1];
+    ai = await Promise.race([
+      api('/photo/label-read', { method: 'POST', body: { task_id: num(taskId), codes, article, image } }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 30000))
+    ]);
+  } catch (_) { ai = null; }
+  if (readLabel.cur !== my) return;
+  // штрихкод не прочитался, а ИИ прочитал артикул, который уже есть в приёмке — открываем товар
+  const ex2 = !ex && d && ai && ai.article ? matchAny(d.items || [], [ai.article]) : null;
+  if (ex2) { URL.revokeObjectURL(url); toast('Этот товар уже в приёмке — открываю'); location.hash = `#item-${num(taskId)}-${num(ex2.id)}`; return; }
+  labelShot = { taskId: num(taskId), file, url, ai, article };
+  location.hash = '#addi-' + num(taskId) + '-' + encodeURIComponent((ai && ai.article) || article);
+}
+async function queueLabelPhoto(taskId, itemId, file) {     // снимок этикетки — фото № 1, тем же путём, что «Снять фото»
+  let b64;
+  try { b64 = await fileToBase64(file); } catch (_) { b64 = ''; }
+  if (!b64) return false;
+  await DB.put('queue', { photo_uid: uuid(), task_id: num(taskId), item_id: num(itemId), seq: 1, shot_at: new Date().toISOString(),
+    created: Date.now(), file_base64: b64, type: file.type || 'image/jpeg', size: file.size, status: 'wait' });
+  await refreshQueue(); sync();
+  return true;
+}
+const lastTaskBrand = d => { const it = (d.items || []).slice().reverse().find(i => i.brand); return it ? it.brand : ''; };
+
 async function finishIntake(id, items) {
   const left = items.filter(i => i.status === 'todo').length;
   if (!confirm(left ? 'Не сняты товаров: ' + left + '. Всё равно передать приёмку завскладу?' : 'Передать приёмку завскладу на проверку?')) return;
@@ -992,23 +1039,40 @@ async function viewAddIntake(taskId, code) {
   header({ back: '#task-' + taskId, title: 'Новый товар' });
   let d = S.task[taskId];
   if (!d) { loading(); try { d = await loadTask(taskId); } catch (e) { return failView(e, () => viewAddIntake(taskId, code)); } }
+  const shot = labelShot && labelShot.taskId === num(taskId) ? labelShot : null;
+  const ai = (shot && shot.ai) || {};
   const pre = addPrefill || {}; addPrefill = null;
-  const brand = pre.brand || d.task.intake_brand || '';
+  let last = ''; try { last = localStorage.getItem('zf-brand') || ''; } catch (_) {}
+  const brand = ai.brand || pre.brand || d.task.intake_brand || lastTaskBrand(d) || last;
+  const name = ai.name || pre.name || '';
+  const code1c = ai.code_1c || pre.code_1c || '';
+  const bNote = {
+    history: ['по истории артикула', ''], label: ['с этикетки', ''],
+    prefix: ['по похожим артикулам — проверьте', 'need'], label_new: ['новый бренд с этикетки — проверьте', 'need'],
+    none: [shot && !shot.ai ? 'этикетка не распознана — проверьте' : 'не распознан — проверьте', 'need']
+  }[ai.brand_source || (shot ? 'none' : '')] || ['', ''];
+  const aNote = ai.article_check === 'confirmed' ? ['совпал с этикеткой', ''] : ai.article_check === 'label' ? ['прочитан с этикетки — проверьте', 'need'] : ['', ''];
+  const chips = [...new Set([brand, ai.brand_label && ai.brand_conflict ? ai.brand_label : '', lastTaskBrand(d), last].filter(Boolean))].slice(0, 4);
   app.innerHTML = `
     <div class="stack">
-      <div class="intake-bar">${icon('box', 18)}<span>${esc(d.task.title)}</span></div>
-      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Артикул — проверьте, что прочитался верно</span>
-        <input class="in mono big-in" id="a-article" value="${esc(pre.article || code)}" autocomplete="off" autocapitalize="characters"></label>
-      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Бренд</span><input class="in" id="a-brand" value="${esc(brand)}" autocomplete="off"></label>
+      ${shot ? `<div class="lbl-row"><img class="lbl-mini" src="${shot.url}" alt=""><div class="mu" style="font-size:13px">Этот снимок станет фото № 1</div></div>` : `<div class="intake-bar">${icon('box', 18)}<span>${esc(d.task.title)}</span></div>`}
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Артикул</span>${aNote[0] ? ' · <span class="' + (aNote[1] ? 'wa' : 'ok') + '">' + aNote[0] + '</span>' : ''}</span>
+        <input class="in mono big-in${aNote[1] ? ' need' : ''}" id="a-article" value="${esc(pre.article && !shot ? pre.article : code)}" autocomplete="off" autocapitalize="characters"></label>
+      <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Бренд</span>${bNote[0] ? ' · <span class="' + (bNote[1] ? 'wa' : 'ok') + '">' + bNote[0] + '</span>' : ''}${ai.brand_conflict ? ' · <span class="wa">на этикетке: <b data-noi18n>' + esc(ai.brand_label) + '</b></span>' : ''}</span>
+        <input class="in${bNote[1] ? ' need' : ''}" id="a-brand" value="${esc(brand)}" autocomplete="off"></label>
+      ${chips.length > 1 ? `<div class="chips" id="a-brands">${chips.map(c => `<button type="button" data-b="${esc(c)}" data-noi18n>${esc(c)}</button>`).join('')}</div>` : ''}
+      ${name ? `<label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Название</span> · <span class="ok">${ai.name_source === 'history' ? 'по истории артикула' : 'с этикетки'}</span></span><input class="in" id="a-name" value="${esc(name)}" autocomplete="off"></label>` : ''}
+      ${ai.oem ? `<div class="mu" style="font-size:13px">Номер производителя: <b class="mono">${esc(ai.oem)}</b></div>` : ''}
       <details class="more-f"><summary>Дополнительно (необязательно)</summary>
         <div class="stack" style="margin-top:10px">
-          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Код 1С</span><input class="in mono" id="a-code" value="${esc(pre.code_1c || '')}" autocomplete="off"></label>
-          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Название</span><input class="in" id="a-name" autocomplete="off"></label>
+          <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Код 1С</span><input class="in mono" id="a-code" value="${esc(code1c)}" autocomplete="off"></label>
+          ${name ? '' : '<label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Название</span><input class="in" id="a-name" autocomplete="off"></label>'}
           <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Ячейка на складе</span><input class="in mono" id="a-cell" autocomplete="off" autocapitalize="characters"></label>
         </div></details>
       <div class="mu" style="font-size:12.5px">Остальное заполнит завскладом в админке.</div>
     </div>
     <div class="dock"><div class="in-dock"><button class="btn pri big" type="button" id="a-save">Добавить и снимать</button></div></div>`;
+  if ($('#a-brands')) $('#a-brands').querySelectorAll('[data-b]').forEach(c => c.onclick = () => { $('#a-brand').value = c.dataset.b; $('#a-brand').classList.remove('need'); });
   $('#a-save').onclick = async () => {
     const body = {
       article: $('#a-article').value.trim(), brand: $('#a-brand').value.trim(),
@@ -1020,6 +1084,12 @@ async function viewAddIntake(taskId, code) {
     const btn = $('#a-save'); btn.disabled = true; btn.textContent = 'Добавляю…';
     try {
       const r = await api('/photo/item-add', { method: 'POST', body });
+      try { localStorage.setItem('zf-brand', body.brand); } catch (_) {}
+      if (shot && r.created) {
+        await queueLabelPhoto(r.task_id, r.item_id, shot.file);
+        if (shot.ai) api('/photo/label-attach', { method: 'POST', body: { item_id: num(r.item_id), ai: { ...shot.ai, brand: body.brand } } }).catch(() => {});
+      }
+      if (shot) { labelShot = null; }
       await loadTask(r.task_id);
       toast(r.created ? 'Товар добавлен в приёмку' : 'Товар уже есть в приёмке — открываю');
       location.hash = `#item-${num(r.task_id)}-${num(r.item_id)}`;
