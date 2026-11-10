@@ -166,6 +166,13 @@ body.login-on .top { display: none; }
 body.modal-on { overflow: hidden; }
 .scan .tools button { display: inline-flex; align-items: center; gap: 6px; }
 .login-cam { color: #F38435; }
+/* круглые кнопки на экране заданий: «+» — новый товар без Excel, над ней — «Обновить» */
+.fabs { position: fixed; right: max(16px, calc((100vw - 720px) / 2 + 16px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 16; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.fab { width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--or); color: var(--on-or); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+.fab.sm { width: 46px; height: 46px; background: var(--sf); color: var(--tx); border: 1px solid var(--bd); box-shadow: 0 3px 10px rgba(0,0,0,.14); }
+.fab:active { transform: scale(.95); }
+main:has(.fabs) { padding-bottom: 170px; }   /* последняя строка списка не прячется под кнопками */
+.fab:focus-visible { outline: 2px solid var(--or); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .modal, .sheet-m { transition: none; } }
 </style>
 </head>
@@ -176,6 +183,6 @@ body.modal-on { overflow: hidden; }
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=12" defer></script>
+<script src="./app.js?v=13" defer></script>
 </body>
 </html>
