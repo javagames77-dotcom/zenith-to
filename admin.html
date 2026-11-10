@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=PT+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>try { if (localStorage.getItem('zf_theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}</script>
 <style>
 :root {
   color-scheme: light;
@@ -16,13 +17,12 @@
   --ok: #15803d; --ok-bg: #e8f6ee; --er: #b42318; --er-bg: #fdecec; --wa: #9a4208; --wa-bg: #fff1e6; --bl: #2563eb; --bl-bg: #eef3ff;
   --logo-bg: transparent; --shadow: 0 1px 2px rgba(0,0,0,.06);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+/* тёмная тема — только по кнопке в шапке (запоминается на этом компьютере) */
+:root[data-theme="dark"] {
     color-scheme: dark;
     --bg: #0f1115; --sf: #171a20; --chip: #232832; --bd: #2c323d; --tx: #e8eaee; --mu: #9aa3b2; --or-soft: #3a2414;
     --ok: #5dd39e; --ok-bg: #173226; --er: #ff8a80; --er-bg: #3a1c1c; --wa: #ffb27a; --wa-bg: #3a2414; --bl: #8fb0ff; --bl-bg: #1a2440;
     --logo-bg: #ffffff; --shadow: none;
-  }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -168,21 +168,22 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .bulk { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--or-soft); border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; }
 .inav { display: flex; gap: 8px; align-items: center; }
 .top .gs { width: 260px; min-height: 32px; font-size: 13px; }
-.intake-hd.st-wa { border-color: var(--wa); background: var(--wa-soft, #fff7e6); }
-.intake-hd.st-ok { border-color: var(--ok); background: var(--ok-soft, #eefaf1); }
+.intake-hd.st-wa { border-color: var(--wa); background: var(--wa-bg); }
+.intake-hd.st-ok { border-color: var(--ok); background: var(--ok-bg); }
 .intake-hd .ih-st { margin-top: 4px; }
 .intake-hd { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .ig textarea.in { width: 100%; min-height: 54px; padding: 6px 8px; font: inherit; font-size: 13px; resize: vertical; }
 .ig input.in { min-width: 90px; width: 100%; padding: 6px 8px; min-height: 34px; font-size: 13px; }
 .ig input.in.mono { font-family: "PT Mono", ui-monospace, monospace; }
-.ig input.in:disabled { background: transparent; border-color: transparent; color: var(--tx); }
-.ig input.need { border-color: var(--wa); background: var(--wa-soft, #fff7e6); }
+.ig input.in:disabled { background: transparent; border-color: transparent; color: var(--tx); -webkit-text-fill-color: var(--tx); opacity: 1; }
+.ig input.need { border-color: var(--wa); background: var(--wa-bg); }
 .ig input.saved { border-color: var(--ok); }
-.ig tr.ver td { background: var(--ok-soft, #eefaf1); }
+.ig tr.ver td { background: var(--ok-bg); }
 .ig .ai-n { font-size: 11.5px; color: var(--mu); margin-top: 3px; }
 .ig .ai-n.wa { color: var(--wa); }
 .ig img.th { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; display: block; }
 .ig .noph { width: 54px; height: 54px; border-radius: 8px; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--mu); font-size: 11px; }
+.thm { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .star { color: var(--or); font-size: 16px; }
@@ -219,7 +220,7 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
 <header class="top">
   <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
   <b>Зеніт-Авто<span>.фото</span></b>
-  <span class="who"><input class="in gs" id="gsearch" type="search" placeholder="Найти товар во всех заданиях" aria-label="Найти товар во всех заданиях" autocomplete="off"><span class="lsw" data-lang-switch></span><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
+  <span class="who"><input class="in gs" id="gsearch" type="search" placeholder="Найти товар во всех заданиях" aria-label="Найти товар во всех заданиях" autocomplete="off"><span class="lsw" data-lang-switch></span><button class="btn sm thm" type="button" id="theme"></button><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
 </header>
 
 <div class="layout">
@@ -433,7 +434,7 @@ const I18N_UK = {
   // ── состояние проверки (a10) ──
   'Ждут проверки': 'Чекають перевірки', 'проверено': 'перевірено', 'не проверено': 'не перевірено', 'фотограф ещё снимает': 'фотограф ще знімає',
   'Данные для 1С проверены': 'Дані для 1С перевірено', 'Требуется проверка данных для 1С': 'Потрібна перевірка даних для 1С', 'товаров пока нет': 'товарів поки немає',
-  'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
@@ -621,7 +622,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a10';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a11';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1996,6 +1997,21 @@ document.addEventListener('keydown', e => {
 });
 
 $('#ver').textContent = 'версия ' + ADMIN_VERSION;
+// переключатель темы: луна — включить тёмную, солнце — светлую
+function drawTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark', b = $('#theme');
+  b.innerHTML = dark
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+  b.setAttribute('aria-label', I18N.t(dark ? 'Светлая тема' : 'Тёмная тема')); b.title = b.getAttribute('aria-label');
+}
+$('#theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  if (dark) document.documentElement.dataset.theme = 'dark'; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('zf_theme', dark ? 'dark' : 'light'); } catch (_) {}
+  drawTheme();
+};
+drawTheme();
 I18N.start();
 boot();
 </script>
