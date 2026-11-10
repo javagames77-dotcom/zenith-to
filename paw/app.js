@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v19';
+const APP_VERSION = 'v20';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -134,6 +134,7 @@ const I18N_UK = {
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
 const I18N_RX = [
+  [/^Удалить приёмку «(.*)»\? В ней ещё нет фото\.$/, m => `Видалити приймання «${m[1].replace(/^Приёмка товара/, 'Приймання товару')}»? У ньому ще немає фото.`],
   [/^Штрихкод: (.+)\. Читаю этикетку…$/, m => `Штрихкод: ${m[1]}. Читаю етикетку…`],
   [/^Приёмка товара (.+)$/, m => `Приймання товару ${m[1]}`],
   [/^Не сняты товаров: (\d+)\. Всё равно передать приёмку завскладу\?$/, m => `Не знято товарів: ${m[1]}. Усе одно передати приймання завскладу?`],
@@ -244,7 +245,8 @@ Object.assign(I18N_UK, {
   'Запомнить код для этого товара?': 'Запам’ятати код для цього товару?', 'В следующий раз коробка найдётся сканером': 'Наступного разу коробку знайде сканер',
   'Запомнить': 'Запам’ятати', 'Не надо': 'Не треба', 'Код запомнен': 'Код запам’ятовано',
   'Нет связи — код не запомнен, попробуйте позже': 'Немає зв’язку — код не запам’ятовано, спробуйте пізніше', 'Не удалось запомнить код': 'Не вдалося запам’ятати код',
-  'Приёмка': 'Приймання', 'Новая приёмка': 'Нове приймання',
+  'Приёмка': 'Приймання', 'Новая приёмка': 'Нове приймання', 'Удалить': 'Видалити', 'Приёмка удалена': 'Приймання видалено',
+  'Нет сети. Удалить можно, когда появится связь': 'Немає мережі. Видалити можна, коли з’явиться зв’язок',
   'Приёмка начата — снимайте этикетку первой коробки': 'Приймання почато — знімайте етикетку першої коробки',
   'Снять этикетку — следующий товар': 'Зняти етикетку — наступний товар', 'Сканировать штрихкод': 'Сканувати штрихкод', 'Этикетка': 'Етикетка',
   'Читаю штрихкод…': 'Читаю штрихкод…', 'Бренд и название распознаются автоматически, 3–10 секунд': 'Бренд і назва розпізнаються автоматично, 3–10 секунд',
@@ -624,6 +626,7 @@ const ICONS = {
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
   tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   phone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>'
@@ -699,10 +702,11 @@ async function viewTasks() {
       <div><h1>Задания</h1><div class="sub">${S.online ? 'Выберите задание для съёмки' : 'Нет сети — показаны сохранённые задания'}</div></div>
       ${open.length ? `<div class="list">${open.map(t => {
         const total = num(t.items_total), done = num(t.items_done);
-        return `<a class="row" href="#task-${num(t.id)}">
+        const canDel = t.source === 'intake' && !num(t.photos_stored) && !num(t.photos_pending) && !S.queue.some(q => num(q.task_id) === num(t.id));
+        return `${canDel ? `<div class="sw" data-del="${num(t.id)}"><button class="sw-del" type="button" tabindex="-1">${icon('trash', 20)}<span>Удалить</span></button>` : ''}<a class="row" href="#task-${num(t.id)}">
           <span><b>${esc(t.title)}</b>${t.source === 'intake' ? ' <span class="pill or">Приёмка</span>' : ''}</span><span class="pill ${done === total && total ? 'ok' : 'bl'}">${done} / ${total}</span>
           <span class="n">${[t.file_name].filter(Boolean).map(esc).join(' · ')}</span>
-          <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>`;
+          <span class="prog" style="grid-column:1/-1;margin-top:6px"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></span></a>${canDel ? '</div>' : ''}`;
       }).join('')}</div>` : '<div class="card empty">Открытых заданий у вас нет. Задание назначает менеджер; приёмку товара можно начать кнопкой «+».</div>'}
     </div>
     <div class="fabs">
@@ -710,6 +714,7 @@ async function viewTasks() {
     </div>`;
   Pull.on(viewTasks);
   $('#add-new').onclick = openIntakeStart;
+  app.querySelectorAll('.sw').forEach(swipeDelete);
 }
 
 // ─── Задание ──────────────────────────────────────────────
@@ -1652,6 +1657,40 @@ function closePhotos() {
 }
 window.addEventListener('hashchange', closePhotos);
 const bigPhoto = u => u ? u.replace('/image/upload/', '/image/upload/c_limit,w_1600,h_1600,q_auto,f_auto/') : '';
+
+// ─── Свайп влево по пустой приёмке — «Удалить» ────────────
+// Только для приёмок фотографа, где ещё нет ни одного фото (лишние нажатия «+»). Сервер проверяет то же самое.
+function swipeDelete(box) {
+  const row = box.querySelector('.row'), W = 96;
+  let x0 = null, y0 = null, dx = 0, horiz = null;
+  const set = (x, anim) => { row.style.transition = anim ? 'transform .18s' : 'none'; row.style.transform = x ? `translateX(${x}px)` : ''; };
+  const closeOthers = () => app.querySelectorAll('.sw.open').forEach(b => { if (b !== box) { b.classList.remove('open'); b.querySelector('.row').style.transform = ''; } });
+  box.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; horiz = null; }, { passive: true });
+  box.addEventListener('touchmove', e => {
+    if (x0 === null) return;
+    const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (horiz === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) horiz = Math.abs(mx) > Math.abs(my);
+    if (!horiz) return;
+    dx = mx; const base = box.classList.contains('open') ? -W : 0;
+    set(Math.max(-W - 20, Math.min(0, base + dx)));
+  }, { passive: true });
+  box.addEventListener('touchend', () => {
+    if (x0 === null || !horiz) { x0 = null; return; }
+    const open = box.classList.contains('open') ? dx < 30 : dx < -50;
+    box.classList.toggle('open', open); if (open) closeOthers();
+    set(open ? -W : 0, true); x0 = null;
+  });
+  row.addEventListener('click', e => { if (box.classList.contains('open')) { e.preventDefault(); box.classList.remove('open'); set(0, true); } });
+  box.querySelector('.sw-del').onclick = async () => {
+    const id = num(box.dataset.del), t = (S.tasks || []).find(x => num(x.id) === id);
+    if (!confirm('Удалить приёмку «' + (t ? t.title : '') + '»? В ней ещё нет фото.')) { box.classList.remove('open'); set(0, true); return; }
+    try {
+      await api('/photo/intake-delete', { method: 'POST', body: { task_id: id } });
+      delete S.task[id]; S.tasks = (S.tasks || []).filter(x => num(x.id) !== id);
+      toast('Приёмка удалена'); viewTasks();
+    } catch (e) { toast(e.offline ? 'Нет сети. Удалить можно, когда появится связь' : e.message, 4000); box.classList.remove('open'); set(0, true); }
+  };
+}
 
 // ─── Окно «Настройки» ─────────────────────────────────────
 // Открывается шестерёнкой в шапке: язык, уведомления, версия, выход. Закрывается крестиком,
