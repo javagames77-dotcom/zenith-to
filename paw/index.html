@@ -173,6 +173,11 @@ body.modal-on { overflow: hidden; }
 .fab:active { transform: scale(.95); }
 main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка списка не прячется под кнопками */
 .fab:focus-visible { outline: 2px solid var(--or); outline-offset: 3px; }
+/* предложение запомнить код (связки кодов) */
+.linkoffer { border: 1.5px solid var(--or); margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+.lo-t { display: flex; gap: 10px; align-items: flex-start; }
+.lo-t .ic { color: var(--or); margin-top: 2px; }
+.lo-c { font-size: 13px; word-break: break-all; }
 /* потянуть вниз — обновить */
 .ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 40px); z-index: 19; width: 38px; height: 38px; border-radius: 50%; background: var(--sf); color: var(--mu); border: 1px solid var(--bd); box-shadow: 0 3px 10px rgba(0,0,0,.12); display: flex; align-items: center; justify-content: center; opacity: 0; transform: translate(-50%, 0); pointer-events: none; }
 .ptr.ready, .ptr.spin { color: var(--or); }
@@ -199,6 +204,6 @@ main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка 
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=14" defer></script>
+<script src="./app.js?v=15" defer></script>
 </body>
 </html>
