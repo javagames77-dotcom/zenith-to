@@ -189,6 +189,9 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .x1c-sum { margin: -2px 0 10px; font-size: 12.5px; }
 .xov { position: fixed; inset: 0; z-index: 60; background: rgba(10,12,16,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .xbox { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; max-height: 90vh; overflow: auto; }
+.xbox label.stack { display: flex; flex-direction: column; gap: 4px; }
+.xbox label.stack .in { width: 100%; }
+.xbox .xsk a { font-family: "PT Mono", ui-monospace, monospace; }
 .pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px; }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .star { color: var(--or); font-size: 16px; }
@@ -446,7 +449,7 @@ const I18N_UK = {
   'Только проверенные товары': 'Лише перевірені товари', 'Скачать архив: фото + Excel': 'Завантажити архів: фото + Excel',
   'Нечего выгружать': 'Нема чого вивантажувати', 'Собираю архив…': 'Збираю архів…', 'Готово': 'Готово', 'Не загрузилась библиотека архива': 'Не завантажилася бібліотека архіву',
   'в 1С': 'в 1С', 'главное': 'головне', 'Сделать главным': 'Зробити головним', 'Для 1С фото не выбраны': 'Для 1С фото не обрано',
-  'Как по умолчанию': 'Як за замовчуванням', 'Оставьте хотя бы одно фото для 1С': 'Залиште хоча б одне фото для 1С', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
+  'Как по умолчанию': 'Як за замовчуванням', 'Какие фото уходят в 1С и какое главное — в карточке товара: под каждым фото «в 1С» и «Сделать главным». По умолчанию — все, кроме этикетки.': 'Які фото йдуть в 1С і яке головне — у картці товару: під кожним фото «в 1С» і «Зробити головним». За замовчуванням — усі, крім етикетки.', 'В 1С нужен настоящий код, а не временный NEW-…. Впишите его:': 'В 1С потрібен справжній код, а не тимчасовий NEW-…. Впишіть його:', 'Оставьте хотя бы одно фото для 1С': 'Залиште хоча б одне фото для 1С', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
 };
 
@@ -642,7 +645,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a12';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a13';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1242,6 +1245,7 @@ async function openExport(taskId) {
   ov.innerHTML = `<div class="card xbox" role="dialog" aria-modal="true" aria-labelledby="x-ttl">
     <div class="bar" style="justify-content:space-between"><h2 id="x-ttl" style="margin:0;font-size:18px">Выгрузка в 1С</h2><button class="btn sm" type="button" id="x-close">Закрыть</button></div>
     <div class="mu" style="font-size:13px">Excel без заголовков: код 1С и ссылка на фото. Фото ${EXP_W}×${EXP_H}, имена nw_Бренд_Артикул_N.jpg, № 1 — главное.</div>
+    <div class="mu" style="font-size:13px">Какие фото уходят в 1С и какое главное — в карточке товара: под каждым фото «в 1С» и «Сделать главным». По умолчанию — все, кроме этикетки.</div>
     <label class="stack" style="gap:4px"><span class="mu">Адрес папки на сервере</span><input class="in mono" id="x-base" value="${esc(expSet.base)}"></label>
     <label class="stack" style="gap:4px"><span class="mu">Папка партии</span><input class="in mono" id="x-folder" value="${esc(ymdS + '_1')}"></label>
     <label class="stack" style="gap:4px"><span class="mu">Версия фото</span><select class="in" id="x-var">
@@ -1252,23 +1256,24 @@ async function openExport(taskId) {
     <div class="mu" id="x-prog" style="font-size:13px"></div></div>`;
   document.body.appendChild(ov);
   const close = () => ov.remove();
-  $('#x-close').onclick = close; ov.onclick = e => { if (e.target === ov) close(); };
+  $('#x-close').onclick = close; ov.onclick = e => { if (e.target === ov) close(); else if (e.target.closest('a[href^="#"]')) close(); };
   const plan = () => {
     const onlyV = d.task.source === 'intake' && $('#x-ver') && $('#x-ver').checked;
-    const out = [], skip = { code: 0, photo: 0, ver: 0 };
+    const out = [], skip = { code: 0, photo: 0, ver: 0 }, noCode = [];
     (d.items || []).forEach(it => {
       if (onlyV && !ver[num(it.id)]) { skip.ver++; return; }
       const list = expList(it, cfg);
       if (!list.length) { skip.photo++; return; }
-      if (!it.code_1c || isTmpCode(it.code_1c)) { skip.code++; return; }
+      if (!it.code_1c || isTmpCode(it.code_1c)) { skip.code++; noCode.push(it); return; }
       list.forEach((p, k) => out.push({ it, p, name: expName(it, k + 1) }));
     });
-    return { out, skip, items: new Set(out.map(x => x.it.id)).size };
+    return { out, skip, noCode, items: new Set(out.map(x => x.it.id)).size };
   };
   const sum = () => {
-    const { out, skip, items } = plan();
+    const { out, skip, noCode, items } = plan();
     $('#x-sum').innerHTML = `<b>Товаров: ${items}, фото: ${out.length}</b>`
-      + (skip.code ? `<div>Пропущено без кода 1С: ${skip.code}</div>` : '') + (skip.photo ? `<div>Пропущено без фото: ${skip.photo}</div>` : '')
+      + (skip.code ? `<div>Пропущено без кода 1С: ${skip.code}</div><div class="xsk mu" style="font-size:12.5px"><span>В 1С нужен настоящий код, а не временный NEW-…. Впишите его:</span> ${noCode.map(it =>
+          d.task.source === 'intake' ? `<a href="#intake-${num(taskId)}">${esc(it.article)}</a>` : `<a href="#item-${num(taskId)}-${num(it.id)}">${esc(it.article)}</a>`).join(', ')}</div>` : '') + (skip.photo ? `<div>Пропущено без фото: ${skip.photo}</div>` : '')
       + (skip.ver ? `<div>Пропущено непроверенных: ${skip.ver}</div>` : '');
   };
   ov.querySelectorAll('input, select').forEach(el => el.addEventListener('change', sum));
