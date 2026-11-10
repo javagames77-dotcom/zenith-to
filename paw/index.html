@@ -173,6 +173,13 @@ body.modal-on { overflow: hidden; }
 .fab:active { transform: scale(.95); }
 main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка списка не прячется под кнопками */
 .fab:focus-visible { outline: 2px solid var(--or); outline-offset: 3px; }
+/* приёмка товара */
+.pill.or { background: var(--or-soft); color: var(--wa); }
+.intake-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--chip); }
+.intake-bar .ic { color: var(--or); }
+.big-in { font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+.more-f summary { cursor: pointer; color: var(--mu); font-size: 14px; padding: 4px 0; }
+#in-brands button.on { background: var(--or); color: var(--on-or); border-color: var(--or); font-weight: 600; }
 /* предложение запомнить код (связки кодов) */
 .linkoffer { border: 1.5px solid var(--or); margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
 .lo-t { display: flex; gap: 10px; align-items: flex-start; }
@@ -204,6 +211,6 @@ main:has(.fabs) { padding-bottom: 110px; }   /* последняя строка 
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="./vendor/zxing-reader.js" defer></script>
-<script src="./app.js?v=15" defer></script>
+<script src="./app.js?v=16" defer></script>
 </body>
 </html>
