@@ -233,7 +233,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm2';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm3';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -471,7 +471,7 @@ async function loadFile(f) {
   try {
     const d = await api('/logist/check', { method: 'POST', body: { file: f.name, sheets } });
     Geo.stop();
-    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, file: f.name, at: Date.now() };
+    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, file: f.name, at: Date.now() };
     selSheet = null; tab = 'err';
     saveLast();
     drawReport();
@@ -628,7 +628,6 @@ function initMap() {
   map = L.map('map', { zoomControl: true }).setView([49.99, 36.27], 11);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }).addTo(map);
   layerZones = L.layerGroup().addTo(map); layerRoutes = L.layerGroup().addTo(map); layerPts = L.layerGroup().addTo(map);
-  if (R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(map).bindPopup('<b>Склад</b>');
   map.on('click', ev => { if (manualFor) placeManual(ev.latlng); });
   drawMap(true);
 }
@@ -655,6 +654,14 @@ function drawMap(fit) {
       .bindTooltip(`${s.code} · ≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}`, { sticky: true });
     if (one) bounds.push(...rt.line);
   }
+  // склады (откуда выезжают машины)
+  const usedWh = new Set(vs.map(s => s.wh));
+  for (const [k, w] of Object.entries(R.warehouses || {})) {
+    const c = whCoords(k); if (!c) continue;
+    L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }), opacity: usedWh.has(k) ? 1 : .45 })
+      .addTo(layerPts).bindPopup(`<b>${esc(w.name)}</b><br>${esc(w.address || '')}${!w.coords ? '<br><span style="color:#6b7280">найден по адресу — проверьте точку; точные координаты можно вписать в справочник</span>' : ''}`);
+  }
+  if (!R.warehouses && R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(layerPts).bindPopup('<b>Склад</b>');
   for (const s of vs) {
     const rt = one ? Routes.of(s) : null;
     for (const r of s.rows) {
@@ -766,6 +773,24 @@ const RPAL = ['#2563eb', '#db2777', '#0d9488', '#ea580c', '#7c3aed', '#65a30d', 
 const sheetColor = s => RPAL[R.report.sheets.indexOf(s) % RPAL.length];
 const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`; };
 function hav(a, b) { const t = x => x * Math.PI / 180, dl = t(b[0] - a[0]), dn = t(b[1] - a[1]); const h = Math.sin(dl / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dn / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); }
+// откуда выезжает лист: склад из справочника; без координат — найденный по адресу; иначе склад с карты зон
+function whCoords(k) {
+  const w = (R.warehouses || {})[k]; if (!w) return null;
+  if (Array.isArray(w.coords) && w.coords.length === 2) return w.coords;
+  const g = R.geo['склад:' + k]; return g && !g.nf ? [g.lat, g.lng] : null;
+}
+const whOf = s => whCoords(s.wh) || R.warehouse;
+async function findWarehouses() {
+  for (const [k, w] of Object.entries(R.warehouses || {})) {
+    if ((Array.isArray(w.coords) && w.coords.length === 2) || R.geo['склад:' + k] || !w.address) continue;
+    let g = { nf: true };
+    try { const c = (await photon(w.address)).find(x => x.house) || null; if (c) g = { lat: c.lat, lng: c.lng, house: true, label: c.label, src: c.src, nf: false }; } catch (_) {}
+    if (g.nf) { await sleep(1100); try { const c = (await nominatim(w.address))[0]; if (c) g = { lat: c.lat, lng: c.lng, house: c.house, label: c.label, src: c.src, nf: false }; } catch (_) {} }
+    R.geo['склад:' + k] = g;
+    if (g.nf) toast(`Не нашёл на карте: ${w.name}. Впишите координаты склада в справочник`);
+    await sleep(1100);
+  }
+}
 const Routes = {
   busy: false,
   pts(s) {                       // уникальные точки листа: [{q, c:[lat,lng]}]
@@ -773,16 +798,16 @@ const Routes = {
     for (const r of s.rows) { const g = r.q && R.geo[r.q]; if (!g || g.nf || seen.has(r.q)) continue; seen.add(r.q); out.push({ q: r.q, c: [g.lat, g.lng] }); }
     return out;
   },
-  key(s) { return s.no + '|' + this.pts(s).map(p => p.c[0].toFixed(5) + ',' + p.c[1].toFixed(5)).join(';'); },
+  key(s) { const w = whOf(s) || [0, 0]; return s.no + '|' + w[0].toFixed(5) + ',' + w[1].toFixed(5) + '|' + this.pts(s).map(p => p.c[0].toFixed(5) + ',' + p.c[1].toFixed(5)).join(';'); },
   of(s) { return R && R.routes ? R.routes[this.key(s)] || null : null; },
   straight(pts) {                // запасной вариант: ближайший сосед, по прямой
-    const wh = R.warehouse, left = pts.slice(), order = []; let cur = wh, km = 0;
+    const wh = this.wh, left = pts.slice(), order = []; let cur = wh, km = 0;
     while (left.length) { left.sort((a, b) => hav(cur, a.c) - hav(cur, b.c)); const p = left.shift(); km += hav(cur, p.c); cur = p.c; order.push(p); }
     km += hav(cur, wh);
     return { line: [wh, ...order.map(p => p.c), wh], km: km * 1.3, min: km * 1.3 / 30 * 60, order: order.map(p => p.q), straight: true };
   },
   async osrm(pts) {
-    const all = [R.warehouse, ...pts.map(p => p.c)];
+    const all = [this.wh, ...pts.map(p => p.c)];
     const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 12000);
     try {
       const u = 'https://router.project-osrm.org/trip/v1/driving/' + all.map(c => c[1].toFixed(6) + ',' + c[0].toFixed(6)).join(';') + '?source=first&roundtrip=true&overview=full&geometries=geojson';
@@ -793,14 +818,15 @@ const Routes = {
     } finally { clearTimeout(tm); }
   },
   async build(run) {
-    if (!R || !R.warehouse || this.busy) return;
+    if (!R || this.busy) return;
     R.routes = R.routes || {};
     this.busy = true; drawGeoLine();
     try {
       for (const s of R.report.sheets) {
         if (run !== Geo.run) break;
         const pts = this.pts(s), k = this.key(s);
-        if (!pts.length || R.routes[k]) continue;
+        this.wh = whOf(s);
+        if (!pts.length || !this.wh || R.routes[k]) continue;
         let rt;
         try { rt = await this.osrm(pts); } catch (_) { rt = this.straight(pts); }
         R.routes[k] = rt;
@@ -817,8 +843,10 @@ const Geo = {
   async start() {
     if (!R) return;
     const my = ++this.run; this.running = true; this.pause = false;
-    // сначала сохраняем зоны по уже известным адресам
+    // сначала сохраняем зоны по уже известным адресам и находим склады без координат
     await this.send(null);
+    await findWarehouses();
+    if (my !== this.run) return;
     const qs = [...new Set(R.report.sheets.flatMap(s => s.rows.map(r => r.q)).filter(q => q && !R.geo[q]))];
     let batch = [];
     for (const q of qs) {
