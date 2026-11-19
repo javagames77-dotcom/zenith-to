@@ -141,6 +141,13 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 /* ── помощник логиста ── */
 .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--mu); }
+.xov { position: fixed; inset: 0; z-index: 2000; background: rgba(10,12,16,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.xbox { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; max-height: 90vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+.btn.danger { background: var(--er); border-color: var(--er); color: #fff; font-weight: 700; }
+.ck-line { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.sh .t b .sw, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.mk.num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 11px "Golos Text", sans-serif; }
+.km { color: var(--tx); font-weight: 600; }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .drop { display: block; border: 2px dashed var(--bd); border-radius: 14px; padding: 30px 20px; text-align: center; background: var(--sf); cursor: pointer; }
 .drop:hover, .drop.over { border-color: var(--or); background: var(--or-soft); }
@@ -226,7 +233,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm1';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm2';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -298,6 +305,27 @@ const num = v => Number(v) || 0;
 const money = v => Math.round(num(v)).toLocaleString('ru-RU');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmtDT = s => s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+// диалог вместо confirm(): ask({ title, text, ok, danger, extra }) → Promise<false | { checked }>
+function ask({ title, text = '', ok = 'Да', cancel = 'Отмена', danger = false, check = '' }) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.className = 'xov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    ov.innerHTML = `<div class="card xbox"><h2 style="margin:0;font-size:18px">${esc(title)}</h2>${text ? `<div>${text}</div>` : ''}
+      ${check ? `<label class="ck-line"><input type="checkbox" id="ask-ck" checked> ${esc(check)}</label>` : ''}
+      <div class="bar" style="justify-content:flex-end"><button class="btn" type="button" data-a="0">${esc(cancel)}</button>
+      <button class="btn ${danger ? 'danger' : 'pri'}" type="button" data-a="1">${esc(ok)}</button></div></div>`;
+    const done = v => { document.removeEventListener('keydown', onKey); ov.remove(); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    ov.onclick = e => {
+      if (e.target === ov) return done(false);
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      done(b.dataset.a === '1' ? { checked: !!(ov.querySelector('#ask-ck') || {}).checked } : false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+    ov.querySelector('[data-a="1"]').focus();
+  });
+}
 let toastT;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2400); }
 const todayStr = () => { const d = new Date(); return [String(d.getDate()).padStart(2, '0'), String(d.getMonth() + 1).padStart(2, '0'), d.getFullYear()].join('.'); };
@@ -389,7 +417,7 @@ function enterApp() {
   drawWho(); route();
 }
 $('#logout').onclick = async () => {
-  if (!confirm('Выйти?')) return;
+  if (!await ask({ title: 'Выйти?', text: 'На этом компьютере нужно будет снова ввести логин и пароль.', ok: 'Выйти' })) return;
   const t = Auth.token; Auth.clear();
   try { await fetch(API_BASE + '/logist/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }); } catch (_) {}
   showLogin();
@@ -410,7 +438,7 @@ window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 let R = null;          // ответ сервера: { report, marks, geo, zones, warehouse }
 let selSheet = null;   // номер выбранного листа или null — все
 let tab = 'err';       // err | all | info
-let map = null, layerZones = null, layerPts = null, manualFor = null;
+let map = null, layerZones = null, layerRoutes = null, layerPts = null, manualFor = null;
 
 function viewCheck() {
   $('#view').innerHTML = `
@@ -485,7 +513,7 @@ function counts() {
     for (const r of s.rows) {
       rows++; if (r.eff === 'note') note++;
       err += rowIssues(s, r).filter(i => i.sev === 'err').length;
-      if (s.type === 'city' && r.q) cityQ.add(r.q);
+      if (r.q) cityQ.add(r.q);
     }
   }
   cityQ.forEach(q => { if (R.geo[q]) found++; });
@@ -518,15 +546,16 @@ function drawKpi() {
   const c = counts(), el = $('#kpi'); if (!el) return;
   el.innerHTML = `<div><b>${R.report.sheets.length}</b>листов</div><div><b>${c.rows}</b>накладных</div>
     <div class="${c.err ? 'er' : 'ok'}"><b>${c.err}</b>ошибок</div><div><b>${c.note}</b>по адресу из примечания</div>
-    <div><b>${c.found}/${c.q}</b>адресов Харькова на карте</div>`;
+    <div><b>${c.found}/${c.q}</b>адресов на карте</div>`;
 }
 function drawSheets() {
   const el = $('#sheets'); if (!el) return;
   const all = R.report.sheets.reduce((a, s) => a + sheetErr(s), 0);
   el.innerHTML = `<button type="button" class="sh ${selSheet === null ? 'on' : ''}" data-no=""><span class="t"><b>Все листы</b><span>${R.report.sheets.length} листов</span></span>${all ? `<span class="pill er">${all}</span>` : '<span class="pill ok">ок</span>'}</button>` +
     R.report.sheets.map(s => { const e = sheetErr(s); const sumBad = s.issues.some(i => i.kind === 'sum');
-      return `<button type="button" class="sh ${selSheet === s.no ? 'on' : ''}" data-no="${esc(s.no)}"><span class="t"><b>${esc(s.code || s.route)}</b>
-      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} нак. · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || 'водитель не указан')}</span></span>
+      const rt = Routes.of(s);
+      return `<button type="button" class="sh ${selSheet === s.no ? 'on' : ''}" data-no="${esc(s.no)}"><span class="t"><b><span class="sw" style="background:${sheetColor(s)}"></span>${esc(s.code || s.route)}</b>
+      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} нак. · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || 'водитель не указан')}</span>${rt ? `<span class="km">≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}${rt.straight ? ' (по прямой)' : ''}</span>` : ''}</span>
       ${e ? `<span class="pill er">${e}</span>` : '<span class="pill ok">ок</span>'}</button>`; }).join('');
   el.onclick = e => { const b = e.target.closest('.sh'); if (!b) return; selSheet = b.dataset.no || null; drawSheets(); drawRows(); drawMap(true); };
 }
@@ -598,7 +627,7 @@ function initMap() {
   if (map) { map.remove(); map = null; }
   map = L.map('map', { zoomControl: true }).setView([49.99, 36.27], 11);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }).addTo(map);
-  layerZones = L.layerGroup().addTo(map); layerPts = L.layerGroup().addTo(map);
+  layerZones = L.layerGroup().addTo(map); layerRoutes = L.layerGroup().addTo(map); layerPts = L.layerGroup().addTo(map);
   if (R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(map).bindPopup('<b>Склад</b>');
   map.on('click', ev => { if (manualFor) placeManual(ev.latlng); });
   drawMap(true);
@@ -606,7 +635,7 @@ function initMap() {
 const ZPAL = ['#2563eb', '#7c3aed', '#0f766e', '#c2410c', '#be185d', '#4d7c0f', '#0369a1', '#a16207', '#9333ea', '#047857', '#b91c1c', '#1d4ed8'];
 function drawMap(fit) {
   if (!map) return;
-  layerZones.clearLayers(); layerPts.clearLayers();
+  layerZones.clearLayers(); layerRoutes.clearLayers(); layerPts.clearLayers();
   const vs = visibleSheets(), cityCodes = new Set(vs.filter(s => s.type === 'city').map(s => s.code));
   const set = vs.some(s => s.type === 'city' && isSat(s.code)) && !vs.some(s => s.type === 'city' && !isSat(s.code)) ? 'subbota' : 'budni';
   const zs = (R.zones || {})[set] || [], names = [...new Set(zs.map(z => z[0]))];
@@ -618,13 +647,28 @@ function drawMap(fit) {
     if (hi || selSheet === null) p.bindTooltip(z[0], { permanent: true, direction: 'center', className: 'zl' });
     if (hi && selSheet !== null) bounds.push(...z[1]);
   });
-  for (const s of vs) for (const r of s.rows) {
-    if (s.type !== 'city' || !r.q) continue;
-    const g = R.geo[r.q]; if (!g || g.nf) continue;
-    const z = zoneStatus(s, r);
-    const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: '', html: `<div class="mk" style="background:${ZCOL[z.cls] || '#6b7280'}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(layerPts);
-    m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}<br>${esc(r.q)}<br><span style="color:#6b7280">${esc(g.manual ? 'точка поставлена вручную' : 'найдено: ' + (g.label || ''))}</span><br><i>${esc(z.text || '')}</i>`);
-    m._pt = s.no + '|' + r.n; bounds.push([g.lat, g.lng]);
+  // маршруты: выбранный лист — толстой линией с номерами остановок, все листы — тонкими линиями своих цветов
+  const one = selSheet !== null;
+  for (const s of vs) {
+    const rt = Routes.of(s); if (!rt) continue;
+    L.polyline(rt.line, { color: sheetColor(s), weight: one ? 5 : 3, opacity: one ? .85 : .6 }).addTo(layerRoutes)
+      .bindTooltip(`${s.code} · ≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}`, { sticky: true });
+    if (one) bounds.push(...rt.line);
+  }
+  for (const s of vs) {
+    const rt = one ? Routes.of(s) : null;
+    for (const r of s.rows) {
+      if (!r.q) continue;
+      const g = R.geo[r.q]; if (!g || g.nf) continue;
+      const z = zoneStatus(s, r), err = rowIssues(s, r).some(i => i.sev === 'err');
+      const col = s.type === 'city' ? (ZCOL[z.cls] || '#6b7280') : (err ? '#b42318' : sheetColor(s));
+      const stop = rt && rt.order ? rt.order.indexOf(r.q) + 1 : 0;
+      const html = stop > 0 ? `<div class="mk num" style="background:${col}">${stop}</div>` : `<div class="mk" style="background:${col}"></div>`;
+      const sz = stop > 0 ? 22 : 16;
+      const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }) }).addTo(layerPts);
+      m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}${stop ? ' · остановка ' + stop : ''}<br>${esc(r.q.replace(/^нп:/, '').split('|')[0])}<br><span style="color:#6b7280">${esc(g.manual ? 'точка поставлена вручную' : 'найдено: ' + (g.label || ''))}</span>${z.text ? `<br><i>${esc(z.text)}</i>` : ''}`);
+      m._pt = s.no + '|' + r.n; bounds.push([g.lat, g.lng]);
+    }
   }
   if (fit && bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
 }
@@ -646,6 +690,7 @@ async function placeManual(ll) {
   saveLast(); refreshAll();
   await Geo.send([r.q]);
   toast('Точка сохранена — для этого адреса больше не ищем');
+  if (!Geo.running) Routes.build(Geo.run);
 }
 function refreshAll() {
   drawKpi(); drawSheets(); drawMap(false); drawGeoLine();
@@ -656,7 +701,8 @@ function drawGeoLine() {
   const el = $('#geo-line'); if (!el) return;
   const c = counts();
   el.innerHTML = c.q ? (Geo.running ? `<span class="prog wide"><i style="width:${Math.round(c.found / c.q * 100)}%"></i></span><span>Ищу адреса на карте: ${c.found} из ${c.q}</span>`
-    : `<span>Адреса Харькова на карте: ${c.found} из ${c.q}${c.found < c.q ? ' · ' : ''}</span>${c.found < c.q ? '<button class="btn sm" type="button" id="geo-go">Продолжить поиск</button>' : ''}`) : '<span>Городских адресов для карты нет</span>';
+    : `<span>Адреса на карте: ${c.found} из ${c.q}${c.found < c.q ? ' · ' : ''}</span>${c.found < c.q ? '<button class="btn sm" type="button" id="geo-go">Продолжить поиск</button>' : ''}`) : '<span>Адресов для карты нет</span>';
+  if (!Geo.running && Routes.busy) el.innerHTML += `<span>· строю маршруты…</span>`;
   const b = $('#geo-go'); if (b) b.onclick = () => Geo.start();
 }
 
@@ -689,7 +735,22 @@ async function nominatim(q) {
   const d = await r.json();
   return d.map(x => { const a = x.address || {}; return { lat: +x.lat, lng: +x.lon, house: !!a.house_number, street: a.road || '', label: [a.road, a.house_number].filter(Boolean).join(', ') || x.display_name.split(',').slice(0, 2).join(','), src: 'Nominatim' }; });
 }
+// населённый пункт (межгород): «нп:Берестин|Красноград» — пробуем все написания, только населённые пункты востока Украины
+async function geocodePlace(q) {
+  for (const name of q.slice(3).split('|')) {
+    try {
+      const r = await fetch('https://photon.komoot.io/api/?limit=5&lang=default&bbox=33.0,47.8,39.0,51.2&osm_tag=place&q=' + encodeURIComponent(name));
+      const d = await r.json();
+      const n0 = lat(name).slice(0, 5);
+      const f = (d.features || []).find(f => lat(f.properties.name || '').startsWith(n0)) || null;
+      if (f) return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], house: false, label: [f.properties.name, f.properties.state].filter(Boolean).join(', '), src: 'Photon', nf: false };
+    } catch (_) {}
+    await sleep(1100);
+  }
+  return { nf: true, label: '' };
+}
 async function geocode(q) {
+  if (q.startsWith('нп:')) return geocodePlace(q);
   let cand = [];
   try { cand = cand.concat(await photon(q)); } catch (_) {}
   let best = cand.find(c => c.house && same(q, c.street));
@@ -700,6 +761,56 @@ async function geocode(q) {
   }
   return best ? { lat: best.lat, lng: best.lng, house: best.house, label: best.label, src: best.src, nf: false } : { nf: true, label: cand[0] ? 'сервис предложил: ' + cand[0].label : '' };
 }
+// ── маршруты на карте: примерный объезд от склада и обратно (публичный сервис OSRM, без него — по прямой) ──
+const RPAL = ['#2563eb', '#db2777', '#0d9488', '#ea580c', '#7c3aed', '#65a30d', '#0284c7', '#ca8a04', '#c026d3', '#059669', '#dc2626', '#4f46e5', '#0891b2', '#9333ea'];
+const sheetColor = s => RPAL[R.report.sheets.indexOf(s) % RPAL.length];
+const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`; };
+function hav(a, b) { const t = x => x * Math.PI / 180, dl = t(b[0] - a[0]), dn = t(b[1] - a[1]); const h = Math.sin(dl / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dn / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); }
+const Routes = {
+  busy: false,
+  pts(s) {                       // уникальные точки листа: [{q, c:[lat,lng]}]
+    const seen = new Set(), out = [];
+    for (const r of s.rows) { const g = r.q && R.geo[r.q]; if (!g || g.nf || seen.has(r.q)) continue; seen.add(r.q); out.push({ q: r.q, c: [g.lat, g.lng] }); }
+    return out;
+  },
+  key(s) { return s.no + '|' + this.pts(s).map(p => p.c[0].toFixed(5) + ',' + p.c[1].toFixed(5)).join(';'); },
+  of(s) { return R && R.routes ? R.routes[this.key(s)] || null : null; },
+  straight(pts) {                // запасной вариант: ближайший сосед, по прямой
+    const wh = R.warehouse, left = pts.slice(), order = []; let cur = wh, km = 0;
+    while (left.length) { left.sort((a, b) => hav(cur, a.c) - hav(cur, b.c)); const p = left.shift(); km += hav(cur, p.c); cur = p.c; order.push(p); }
+    km += hav(cur, wh);
+    return { line: [wh, ...order.map(p => p.c), wh], km: km * 1.3, min: km * 1.3 / 30 * 60, order: order.map(p => p.q), straight: true };
+  },
+  async osrm(pts) {
+    const all = [R.warehouse, ...pts.map(p => p.c)];
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const u = 'https://router.project-osrm.org/trip/v1/driving/' + all.map(c => c[1].toFixed(6) + ',' + c[0].toFixed(6)).join(';') + '?source=first&roundtrip=true&overview=full&geometries=geojson';
+      const d = await (await fetch(u, { signal: ctl.signal })).json();
+      if (d.code !== 'Ok') throw 0;
+      const wp = d.waypoints.slice(1).map((w, i) => ({ q: pts[i].q, o: w.waypoint_index })).sort((a, b) => a.o - b.o);
+      return { line: d.trips[0].geometry.coordinates.map(c => [c[1], c[0]]), km: d.trips[0].distance / 1000, min: d.trips[0].duration / 60, order: wp.map(x => x.q) };
+    } finally { clearTimeout(tm); }
+  },
+  async build(run) {
+    if (!R || !R.warehouse || this.busy) return;
+    R.routes = R.routes || {};
+    this.busy = true; drawGeoLine();
+    try {
+      for (const s of R.report.sheets) {
+        if (run !== Geo.run) break;
+        const pts = this.pts(s), k = this.key(s);
+        if (!pts.length || R.routes[k]) continue;
+        let rt;
+        try { rt = await this.osrm(pts); } catch (_) { rt = this.straight(pts); }
+        R.routes[k] = rt;
+        saveLast(); drawSheets(); drawMap(false);
+        await sleep(1100);
+      }
+    } finally { this.busy = false; drawGeoLine(); }
+  }
+};
+
 const Geo = {
   running: false, pause: false, run: 0,
   stop() { this.run++; this.running = false; },
@@ -708,7 +819,7 @@ const Geo = {
     const my = ++this.run; this.running = true; this.pause = false;
     // сначала сохраняем зоны по уже известным адресам
     await this.send(null);
-    const qs = [...new Set(R.report.sheets.filter(s => s.type === 'city').flatMap(s => s.rows.map(r => r.q)).filter(q => q && !R.geo[q]))];
+    const qs = [...new Set(R.report.sheets.flatMap(s => s.rows.map(r => r.q)).filter(q => q && !R.geo[q]))];
     let batch = [];
     for (const q of qs) {
       if (my !== this.run || this.pause) break;
@@ -723,12 +834,13 @@ const Geo = {
     this.running = false;
     if (batch.length) await this.send(batch);
     saveLast(); refreshAll();
+    Routes.build(my);
   },
   // отправить найденные точки и результат проверки зон по затронутым накладным (q = null — по всем)
   async send(qs) {
     if (!R) return;
     const set = qs ? new Set(qs) : null, items = [], rows = [], zone = [];
-    if (qs) qs.forEach(q => { const g = R.geo[q]; if (g) items.push({ q, ...g }); });
+    if (qs) qs.forEach(q => { const g = R.geo[q]; if (g) items.push({ q, lat: g.lat, lng: g.lng, house: g.house, label: g.label, src: g.src, nf: g.nf, manual: g.manual }); });
     for (const s of R.report.sheets) for (const r of s.rows) {
       if (s.type !== 'city' || !r.q || !R.geo[r.q] || (set && !set.has(r.q))) continue;
       rows.push({ date: s.date, no: s.no, n: r.n });
@@ -791,12 +903,27 @@ async function viewStats(body) {
     $('#st-res').innerHTML = `<div class="kpi"><div><b>${tot.sheets}</b>листов проверено</div><div class="${tot.errors ? 'er' : ''}"><b>${tot.errors}</b>ошибок найдено</div>
       <div class="ok"><b>${tot.ok}</b>подтверждено</div><div class="${falsePct !== null && falsePct >= 30 ? 'er' : ''}"><b>${falsePct === null ? '—' : falsePct + '%'}</b>ложных тревог (цель &lt; 30%)</div>
       <div><b>${avg(false) ?? '—'} → ${avg(true) ?? '—'}</b>мин в день: без помощника → с ним</div></div>
-      <div class="tw"><table><thead><tr><th>День</th><th>Листов</th><th>Накладных</th><th>Ошибок</th><th>По видам</th><th>Верно</th><th>Ложных</th><th>Не отмечено</th><th>Минут</th></tr></thead><tbody>
+      <div class="tw"><table><thead><tr><th>День</th><th>Листов</th><th>Накладных</th><th>Ошибок</th><th>По видам</th><th>Верно</th><th>Ложных</th><th>Не отмечено</th><th>Минут</th>${Auth.isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
       ${days.map(x => `<tr><td class="nw">${esc(x.day.split('-').reverse().join('.'))}</td><td>${x.sheets}</td><td>${x.rows}</td><td>${x.errors}</td>
         <td class="small">${Object.entries(x.by_kind || {}).map(([k, v]) => esc(KIND[k] || k) + ': ' + v).join(', ') || '—'}</td>
         <td>${x.ok}</td><td>${x.false}</td><td>${Math.max(0, num(x.errors) - num(x.ok) - num(x.false))}</td>
-        <td>${x.minutes ?? '—'}${x.minutes !== null && x.minutes !== undefined ? (x.with_helper ? '' : ' <span class="pill">без помощника</span>') : ''}</td></tr>`).join('')}
+        <td>${x.minutes ?? '—'}${x.minutes !== null && x.minutes !== undefined ? (x.with_helper ? '' : ' <span class="pill">без помощника</span>') : ''}</td>
+        ${Auth.isAdmin() ? `<td><button class="btn sm" type="button" data-del="${esc(x.day)}">Удалить</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="10" class="empty">Пока нет данных</td></tr>`}
       </tbody></table></div>`;
+    $('#st-res').onclick = async e => {
+      const b = e.target.closest('[data-del]'); if (!b) return;
+      const x = days.find(d => d.day === b.dataset.del), dd = x.day.split('-').reverse().join('.');
+      const a = await ask({ title: `Удалить данные за ${dd}?`, danger: true, ok: 'Удалить',
+        text: `Удалятся листы (${x.sheets}), накладные (${x.rows}), найденные ошибки и отметки логиста за этот день. Вернуть нельзя.<br><span class="mu small">Точки адресов на карте останутся — они пригодятся в другие дни.</span>`,
+        check: x.minutes !== null && x.minutes !== undefined ? 'Удалить и записанное время на проверку' : '' });
+      if (!a) return;
+      try {
+        const r = await api('/logist/admin/delete-day', { method: 'POST', body: { day: dd, with_time: x.minutes !== null && x.minutes !== undefined ? a.checked : false } });
+        if (R && R.report.sheets.some(s => s.date === dd)) { R = null; try { localStorage.removeItem(LAST_KEY); } catch (_) {} }
+        toast(`Удалено: листов ${r.deleted.sheets}, накладных ${r.deleted.rows}`);
+        viewStats({ days: 60 });
+      } catch (ex) { toast(ex.message); }
+    };
   } catch (e) { $('#st-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 
@@ -834,8 +961,11 @@ function drawUsers(list) {
   $('#u-res').onclick = async e => {
     const b = e.target.closest('[data-ua]'); if (!b) return;
     const body = { action: b.dataset.ua, id: b.dataset.id };
-    if (body.action === 'password') { body.password = genPassword(); if (!confirm('Задать новый пароль? Старый перестанет работать.')) return; }
-    else if (!confirm(body.action === 'block' ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?')) return;
+    const name = b.closest('tr').querySelector('b').textContent;
+    if (body.action === 'password') { body.password = genPassword(); if (!await ask({ title: 'Задать новый пароль?', text: `${esc(name)}: старый пароль перестанет работать, вход на других устройствах закроется.`, ok: 'Задать пароль' })) return; }
+    else if (!await ask(body.action === 'block'
+      ? { title: 'Заблокировать пользователя?', text: `${esc(name)} больше не сможет войти.`, ok: 'Заблокировать', danger: true }
+      : { title: 'Разблокировать пользователя?', text: `${esc(name)} снова сможет войти.`, ok: 'Разблокировать' })) return;
     try { const r = await api('/logist/admin/user-action', { method: 'POST', body }); drawUsers(r.users);
       if (body.password) $('#u-creds').innerHTML = `<div class="creds">Новый пароль: <code>${esc(body.password)}</code> — передайте пользователю</div>`;
     } catch (ex) { toast(ex.message); }
