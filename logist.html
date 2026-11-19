@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Зеніт-Авто.маршрути — помощник логиста</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=PT+Mono&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>try { if (localStorage.getItem('zm_theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}</script>
+<style>
+
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8; --sf: #ffffff; --chip: #f1f2f4; --bd: #e7e7ea; --tx: #111318; --mu: #6b7280;
+  --or: #F38435; --on-or: #111318; --or-soft: #fff1e6;
+  --ok: #15803d; --ok-bg: #e8f6ee; --er: #b42318; --er-bg: #fdecec; --wa: #9a4208; --wa-bg: #fff1e6; --bl: #2563eb; --bl-bg: #eef3ff;
+  --logo-bg: transparent; --shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+/* тёмная тема — только по кнопке в шапке (запоминается на этом компьютере) */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f1115; --sf: #171a20; --chip: #232832; --bd: #2c323d; --tx: #e8eaee; --mu: #9aa3b2; --or-soft: #3a2414;
+    --ok: #5dd39e; --ok-bg: #173226; --er: #ff8a80; --er-bg: #3a1c1c; --wa: #ffb27a; --wa-bg: #3a2414; --bl: #8fb0ff; --bl-bg: #1a2440;
+    --logo-bg: #ffffff; --shadow: none;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--tx); font: 14px/1.45 "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--bl); }
+.mono { font-family: "PT Mono", ui-monospace, monospace; font-size: 12.5px; }
+.mu { color: var(--mu); }
+.nw { white-space: nowrap; }
+
+/* каркас */
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--sf); border-bottom: 1px solid var(--bd); }
+.top .logo { display: inline-flex; background: var(--logo-bg); border-radius: 6px; padding: 1px; }
+.top .logo svg { height: 30px; width: auto; display: block; }
+.top b { font-size: 17px; letter-spacing: -.01em; }
+.top b span { color: var(--or); }
+.top .r { margin-left: auto; color: var(--mu); font-size: 12.5px; }
+.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: calc(100vh - 51px); }
+.side { background: var(--sf); border-right: 1px solid var(--bd); padding: 12px 10px; }
+.side a { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 10px; color: var(--tx); text-decoration: none; margin-bottom: 2px; }
+.side a:hover { background: var(--chip); }
+.side a.on { background: var(--or-soft); color: var(--wa); font-weight: 700; box-shadow: inset 3px 0 0 var(--or); }
+.side a.soon { color: var(--mu); }
+.side .ver { padding: 14px 12px 0; color: var(--mu); font-size: 11.5px; }
+.side a.soon::after { content: "скоро"; font-size: 10.5px; background: var(--chip); border-radius: 999px; padding: 0 7px; }
+:root[lang="uk"] .side a.soon::after { content: "незабаром"; }
+main { padding: 20px 24px 40px; min-width: 0; }
+main:focus { outline: none; }
+.hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.hd h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.hd .sub { color: var(--mu); margin-top: 2px; }
+.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crumb { font-size: 13px; margin-bottom: 6px; }
+.crumb a { color: var(--mu); text-decoration: none; }
+.crumb a:hover { color: var(--tx); }
+
+/* элементы */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--bd); background: var(--sf); color: var(--tx); font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.btn:hover { border-color: var(--mu); }
+.btn.pri { background: var(--or); border-color: var(--or); color: var(--on-or); font-weight: 700; }
+.btn.pri:hover { filter: brightness(1.05); }
+.btn.sm { min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+.in { min-height: 38px; border: 1px solid var(--bd); border-radius: 10px; background: var(--sf); padding: 0 12px; min-width: 0; }
+textarea.in { padding: 8px 12px; min-height: 64px; width: 100%; resize: vertical; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--tx); white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.wa { background: var(--wa-bg); color: var(--wa); } .pill.er { background: var(--er-bg); color: var(--er); } .pill.bl { background: var(--bl-bg); color: var(--bl); }
+.card { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+.kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi div { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 10px 14px; color: var(--mu); font-size: 12.5px; }
+.kpi b { display: block; font-size: 24px; color: var(--tx); line-height: 1.2; }
+.kpi .ok b { color: var(--ok); } .kpi .wa b { color: var(--wa); } .kpi .er b { color: var(--er); }
+.prog { display: inline-block; width: 110px; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; vertical-align: middle; }
+.prog i { display: block; height: 100%; background: var(--or); }
+.prog.wide { width: 260px; }
+.tw { overflow-x: auto; background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--bd); text-align: left; vertical-align: middle; }
+th { color: var(--mu); font-weight: 600; font-size: 12px; background: var(--sf); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--chip); }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--bd); margin-bottom: 12px; flex-wrap: wrap; }
+.tabs button { border: 0; background: none; padding: 8px 12px; color: var(--mu); cursor: pointer; font-weight: 500; }
+.tabs button.on { color: var(--tx); font-weight: 700; box-shadow: inset 0 -2px 0 var(--or); }
+.thumbs { display: inline-flex; gap: 4px; align-items: center; }
+.thumbs img, .thumbs span.ph { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; background: var(--chip); display: block; }
+.thumbs img.first { box-shadow: 0 0 0 1.5px var(--or); }
+.thumbs em { font-style: normal; color: var(--mu); font-size: 12px; margin-left: 2px; }
+.empty { text-align: center; padding: 40px 20px; color: var(--mu); }
+.loading { padding: 40px; text-align: center; color: var(--mu); }
+.err { background: var(--er-bg); color: var(--er); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+.note { background: var(--wa-bg); color: var(--wa); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+
+
+/* вход в админку: светлая карточка по центру — нарочно не похожа на тёмный экран входа в приложение фотографа */
+.auth { min-height: 100vh; display: none; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); }
+body.need-auth .auth { display: flex; }
+body.need-auth .top, body.need-auth .layout { display: none; }
+.auth-card { width: 100%; max-width: 400px; background: var(--sf); border: 1px solid var(--bd); border-radius: 18px; padding: 30px 28px 24px; box-shadow: 0 8px 30px rgba(0,0,0,.07); }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.auth-brand .logo { display: inline-flex; background: var(--logo-bg); border-radius: 6px; padding: 1px; }
+.auth-brand svg { height: 36px; width: auto; display: block; }
+.auth-brand b { font-size: 18px; } .auth-brand b span { color: var(--or); }
+.auth-badge { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--wa); background: var(--wa-bg); border-radius: 999px; padding: 2px 10px; margin-bottom: 8px; }
+.auth h1 { font-size: 22px; margin: 0 0 4px; }
+.auth .sub { color: var(--mu); margin: 0 0 18px; }
+.auth label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--mu); margin-bottom: 12px; }
+.auth .in { width: 100%; min-height: 44px; font-size: 15px; }
+.auth .btn.pri { width: 100%; min-height: 46px; font-size: 15px; margin-top: 4px; }
+.auth .err { margin: 12px 0 0; }
+.auth .foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--bd); color: var(--mu); font-size: 12.5px; }
+.top .who { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--mu); font-size: 12.5px; }
+.top .who b { color: var(--tx); font-size: 13px; }
+
+/* пользователи */
+.panel { background: var(--sf); border: 1px solid var(--bd); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.panel h2 { font-size: 16px; margin: 0 0 10px; }
+.pass { display: flex; gap: 8px; }
+.pass .in { flex: 1; font-family: "PT Mono", ui-monospace, monospace; }
+.creds { background: var(--ok-bg); color: var(--ok); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.creds code { font-family: "PT Mono", ui-monospace, monospace; font-size: 15px; color: var(--tx); background: var(--sf); border-radius: 6px; padding: 1px 6px; }
+.uacts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--tx); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 60; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+.toast.on { opacity: 1; }
+
+
+/* ── помощник логиста ── */
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--mu); }
+tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
+.drop { display: block; border: 2px dashed var(--bd); border-radius: 14px; padding: 30px 20px; text-align: center; background: var(--sf); cursor: pointer; }
+.drop:hover, .drop.over { border-color: var(--or); background: var(--or-soft); }
+.drop b { display: block; font-size: 16px; margin-bottom: 4px; }
+.drop.slim { padding: 12px 16px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.drop.slim b { display: inline; font-size: 14px; margin: 0; }
+.work { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; align-items: start; }
+.sheets { display: flex; flex-direction: column; gap: 6px; max-height: 560px; overflow: auto; padding-right: 2px; }
+.sh { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--bd); border-radius: 12px; background: var(--sf); cursor: pointer; text-align: left; width: 100%; }
+.sh:hover { border-color: var(--mu); }
+.sh.on { border-color: var(--or); box-shadow: 0 0 0 2px var(--or-soft); }
+.sh .t { flex: 1; min-width: 0; }
+.sh .t b { display: block; font-size: 13.5px; }
+.sh .t span { display: block; color: var(--mu); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mapbox { position: relative; border: 1px solid var(--bd); border-radius: 14px; overflow: hidden; background: var(--sf); }
+#map { height: 560px; }
+.map-hint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 500; background: var(--tx); color: var(--bg); border-radius: 10px; padding: 7px 12px; font-weight: 600; display: none; gap: 10px; align-items: center; }
+.map-hint.on { display: flex; }
+.map-hint button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 8px; padding: 2px 8px; cursor: pointer; }
+.geo-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 2px; color: var(--mu); font-size: 12.5px; }
+.mk { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px #0006; }
+.mk.wh { width: 22px; height: 22px; border-radius: 6px; background: #111318; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.leaflet-container { font: 13px/1.45 "Golos Text", system-ui, sans-serif; }
+.zl { background: transparent; border: 0; box-shadow: none; font-weight: 700; font-size: 11px; color: #333; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.zl::before { display: none; }
+td.iss { min-width: 260px; }
+.isx { padding: 6px 0; border-top: 1px dashed var(--bd); }
+.isx:first-child { border-top: 0; padding-top: 0; }
+.isx .ttl { font-weight: 600; }
+.isx .txt { color: var(--mu); font-size: 12.5px; }
+.isx.er .ttl { color: var(--er); }
+.isx.inf .ttl { color: var(--mu); font-weight: 500; }
+.verd { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 5px; }
+.verd .btn.sm.on-ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.verd .btn.sm.on-false { background: var(--chip); border-color: var(--mu); color: var(--tx); }
+.verd input.in { min-height: 30px; font-size: 12.5px; flex: 1; min-width: 120px; padding: 0 8px; }
+tr.sel td { background: var(--or-soft); }
+tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
+.addr-note { display: inline-block; font-size: 11px; font-weight: 600; color: var(--bl); background: var(--bl-bg); border-radius: 999px; padding: 0 7px; margin-right: 4px; }
+.geo-st { font-size: 12px; margin-top: 3px; }
+.geo-st.ok { color: var(--ok); } .geo-st.er { color: var(--er); } .geo-st.wa { color: var(--wa); } .geo-st.mu { color: var(--mu); }
+.sum-er { color: var(--er); font-weight: 700; }
+.small { font-size: 12.5px; }
+.filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 0 10px; }
+.filters .tabs { margin: 0; border: 0; }
+.timef { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.timef label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--mu); }
+.timef label.ck { flex-direction: row; align-items: center; gap: 6px; color: var(--tx); min-height: 38px; }
+.mt { margin-top: 14px; }
+@media (max-width: 1100px) { .work { grid-template-columns: 1fr; } .sheets { max-height: 240px; } #map { height: 420px; } }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--bd); padding: 8px; }
+  .side a { flex: none; margin: 0; }
+  .top { flex-wrap: wrap; padding: 8px 12px; }
+  .top .who { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .tw table { min-width: 760px; }
+  main { padding: 16px 14px 40px; }
+}
+</style>
+</head>
+<body class="need-auth">
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg"><symbol id="logo" viewBox="0 0 384 462"><g transform="translate(0,473) scale(0.1,-0.1)"><path fill="#000000" d="M1415 3698 c-3 -29 -15 -116 -26 -192 -11 -76 -18 -141 -15 -143 2 -2 33 4 69 13 l66 16 -17 26 c-27 42 -23 136 9 194 l27 46 -27 24 c-14 13 -38 34 -52 46 l-27 24 -7 -54z"></path><path fill="#000000" d="M1174 3567 c-82 -85 -168 -178 -192 -209 l-42 -55 35 -72 36 -72 38 33 c21 18 67 50 102 70 35 20 80 46 100 58 l37 22 21 167 c12 91 24 176 27 189 2 12 0 22 -5 22 -5 0 -76 -69 -157 -153z"></path><path fill="#000000" d="M858 3082 c31 -42 49 -56 54 -40 3 7 -13 26 -35 41 l-39 29 20 -30z"></path><path fill="#000000" d="M727 3023 c-70 -101 -141 -215 -205 -332 l-52 -94 112 7 c62 4 115 9 119 12 14 8 76 130 94 184 10 30 32 85 50 121 l32 66 -45 54 c-24 30 -45 55 -47 57 -2 2 -27 -32 -58 -75z"></path><path fill="#000000" d="M565 2521 l-30 -6 47 -27 c37 -20 54 -25 75 -19 21 6 37 3 61 -12 l33 -19 -3 43 -3 44 -75 2 c-41 0 -88 -2 -105 -6z"></path><path fill="#000000" d="M520 2394 c-52 -14 -112 -29 -132 -35 -31 -8 -41 -17 -58 -56 -55 -126 -166 -460 -156 -470 2 -3 87 61 187 142 l183 147 17 84 c10 47 27 113 38 146 12 34 20 63 18 64 -1 1 -45 -9 -97 -22z"></path><path fill="#000000" d="M700 2393 c-6 -16 -15 -39 -20 -53 -17 -46 -50 -174 -50 -197 0 -22 6 -26 243 -158 l69 -38 -47 69 c-68 99 -120 228 -139 344 -4 20 -15 41 -26 48 -18 11 -21 9 -30 -15z"></path><path fill="#000000" d="M2045 2218 c-48 -76 -142 -194 -243 -306 l-76 -83 26 -52 c14 -29 91 -192 173 -364 l148 -312 95 87 c184 168 413 437 568 667 103 152 197 306 190 312 -5 6 -655 95 -776 108 l-65 6 -40 -63z"></path><path fill="#000000" d="M2941 1972 c-190 -305 -372 -535 -624 -786 -93 -92 -165 -172 -160 -176 4 -4 111 -81 236 -170 l228 -161 67 59 c108 96 293 291 382 402 103 130 201 276 290 432 l70 122 -33 36 c-18 19 -98 105 -177 190 -78 85 -153 165 -165 178 l-22 23 -92 -149z"></path><path fill="#000000" d="M380 1888 l-202 -162 70 -35 70 -34 166 121 c92 67 170 122 175 122 4 0 46 -27 94 -60 47 -33 88 -60 91 -60 3 0 29 16 57 36 l50 37 -178 98 c-98 54 -181 99 -184 99 -4 0 -98 -73 -209 -162z"></path><path fill="#000000" d="M707 1763 c15 -98 18 -102 173 -205 80 -53 148 -97 152 -97 3 -1 4 7 2 17 -2 9 -5 35 -7 57 -2 22 -6 45 -10 52 -10 16 -293 213 -306 213 -6 0 -7 -15 -4 -37z"></path><path fill="#000000" d="M370 1632 l-215 -158 -18 -84 c-20 -94 -36 -392 -20 -375 6 6 123 145 261 311 l251 300 -14 49 c-8 26 -15 63 -15 82 0 18 -3 33 -7 33 -5 -1 -105 -72 -223 -158z"></path><path fill="#000000" d="M1437 1604 c-72 -48 -207 -118 -266 -139 l-36 -12 -154 -502 c-85 -276 -152 -504 -148 -507 9 -9 236 52 343 92 155 57 435 201 510 262 l21 17 -97 405 c-53 223 -98 410 -101 417 -2 8 -28 -4 -72 -33z"></path><path fill="#000000" d="M1632 1589 c3 -8 45 -183 93 -389 72 -305 93 -378 109 -390 35 -25 390 -252 403 -257 6 -3 -22 94 -63 214 -55 160 -82 223 -99 238 -22 18 -71 113 -180 351 -30 66 -40 76 -136 151 -123 94 -134 102 -127 82z"></path><path fill="#000000" d="M427 1218 l-269 -322 27 -13 c24 -13 28 -12 44 9 10 13 119 158 241 323 122 165 227 306 233 313 5 6 6 12 1 12 -5 0 -130 -145 -277 -322z"></path><path fill="#000000" d="M463 1118 c-148 -200 -272 -368 -276 -375 -12 -20 31 -92 89 -150 38 -38 80 -66 139 -94 47 -22 93 -39 102 -37 11 2 75 150 209 483 l192 480 -49 7 c-27 5 -67 17 -89 28 -22 11 -41 20 -44 20 -2 0 -125 -163 -273 -362z"></path><path fill="#000000" d="M832 922 c-105 -262 -194 -484 -197 -492 -4 -11 10 -23 51 -43 31 -15 57 -27 59 -25 5 6 305 995 305 1005 0 6 -6 15 -13 21 -10 9 -52 -87 -205 -466z"></path><path fill="#000000" d="M1635 640 c-71 -44 -186 -105 -255 -136 -112 -51 -346 -133 -425 -150 -27 -5 -8 -17 185 -114 l215 -109 75 5 c167 11 359 60 555 143 100 43 270 131 262 136 -14 12 -464 298 -472 301 -5 1 -68 -33 -140 -76z"></path><path fill="#000000" d="M310 488 c29 -24 494 -254 654 -322 204 -87 159 -55 -109 78 -148 74 -312 149 -364 168 -52 18 -120 47 -150 65 -34 20 -46 25 -31 11z"></path><path fill="#F38435" d="M3515 4609 c-185 -32 -358 -85 -478 -145 -195 -98 -377 -307 -572 -658 -21 -38 -76 -151 -121 -250 -70 -152 -87 -180 -106 -182 -13 -1 -61 -5 -108 -8 l-86 -5 -40 52 c-22 29 -67 75 -101 102 l-60 50 214 318 c118 175 223 337 233 360 37 80 18 170 -42 207 -46 28 -89 26 -393 -15 -368 -50 -391 -54 -426 -78 -57 -39 -74 -71 -74 -142 0 -54 4 -68 23 -87 30 -31 87 -31 327 -2 104 12 191 21 193 19 2 -2 -155 -249 -315 -492 -42 -65 -63 -114 -63 -149 0 -40 29 -93 66 -118 l33 -22 -102 -23 c-235 -52 -356 -110 -473 -226 -86 -85 -131 -154 -181 -275 -46 -113 -65 -210 -65 -335 -1 -234 81 -430 239 -575 119 -109 283 -169 427 -156 69 6 156 25 156 33 0 2 -5 13 -11 24 -9 17 1 32 77 112 110 116 223 257 293 367 30 47 54 86 55 86 1 1 26 -2 56 -6 46 -7 57 -5 70 9 8 10 94 153 190 318 l175 301 45 6 c25 3 118 8 207 12 l161 7 -119 -364 c-65 -199 -116 -365 -114 -368 3 -2 80 -14 171 -27 152 -21 169 -25 195 -50 16 -15 30 -26 32 -23 2 2 65 182 140 399 75 217 141 409 147 426 l11 31 145 7 c168 8 230 26 289 83 72 70 93 158 55 241 -15 34 -29 47 -66 63 -42 19 -58 20 -165 14 l-119 -7 16 43 c9 24 83 238 166 474 122 347 151 441 152 487 1 69 -20 103 -84 136 -55 28 -122 28 -275 1z m-195 -456 c0 -5 -55 -168 -122 -364 l-122 -355 -174 -13 c-96 -6 -176 -10 -178 -8 -8 8 267 533 304 581 20 27 62 66 92 86 78 53 200 97 200 73z m-1430 -1074 c60 -9 190 -60 190 -74 0 -3 -71 -128 -159 -278 -87 -150 -178 -306 -202 -347 -49 -86 -118 -159 -179 -190 -24 -12 -69 -25 -100 -27 -73 -7 -144 23 -201 84 -112 122 -129 314 -43 494 46 96 81 137 173 207 147 111 342 160 521 131z"></path><path fill="#F38435" d="M3190 2114 c0 -9 294 -324 302 -324 15 0 61 82 68 118 3 20 2 57 -2 82 -9 54 -57 103 -115 119 -39 11 -253 15 -253 5z"></path></g></symbol></svg>
+
+<header class="top">
+  <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
+  <b>Зеніт-Авто<span>.маршрути</span></b>
+  <span class="who"><button class="btn sm thm" type="button" id="theme" aria-label="Сменить тему"></button><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
+</header>
+
+<div class="layout">
+  <nav class="side" aria-label="Разделы">
+    <a href="#check" data-nav="check">Проверка листов</a>
+    <a href="#fix" data-nav="fix">Исправить адрес в 1С</a>
+    <a href="#stats" data-nav="stats">Итоги пилота</a>
+    <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
+    <div class="ver" id="ver"></div>
+  </nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+<div class="auth" id="auth"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+const APP_VERSION = 'm1';           // поднимать при каждой выкладке; видно внизу меню
+const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
+
+// ─── разбор Excel маршрутных листов ───────────────────────
+// Разбор печатной формы «Маршрутний лист» из 1С (Excel). На входе — строки листа (массив массивов).
+function parseRouteSheets(aoa) {
+  const toNum = v => typeof v === 'number' ? v : (parseFloat(String(v || '').replace(/\s/g, '').replace(',', '.')) || 0);
+  const sheets = []; let cur = null;
+  for (const row of aoa) {
+    const c = Array.from({ length: 12 }, (_, i) => row[i] === null || row[i] === undefined ? '' : String(row[i]));
+    const raw = row;
+    const a = c[0].trim();
+    if (a.startsWith('МАРШРУТНИЙ ЛИСТ')) {
+      const m = a.match(/№\s*(\d+)\s*від\s*([\d.]+)/u);
+      cur = { no: m ? m[1] : String(sheets.length + 1), date: m ? m[2] : '', route: '', driver: '', car: '', dep: '', total: 0, brutto: 0, rows: [] };
+      sheets.push(cur);
+    } else if (!cur) continue;
+    else if (a.startsWith('Маршрут:')) cur.route = a.split(':').slice(1).join(':').trim();
+    else if (a.startsWith('Водій:')) cur.driver = a.split(':').slice(1).join(':').trim();
+    else if (a.startsWith('Автомобіль:')) cur.car = a.split(':').slice(1).join(':').trim();
+    else if (a.startsWith('Час виїзду:')) cur.dep = a.split(':').slice(1).join(':').trim();
+    else if (a.startsWith('Итого брутто')) cur.brutto = toNum(a.split(':')[1]);
+    else if (a.startsWith('Итого:')) { cur.total = toNum(raw[5]); cur.places = c[6]; }
+    else if (/^\d+$/.test(a)) {
+      const inv = c[3].split(',');
+      cur.rows.push({ n: Number(a), client: c[1].trim(), addr: c[2].trim(), inv: inv[0].trim(), manager: inv.length > 1 ? inv[1].trim() : '',
+        bg: c[4], sum: toNum(raw[5]), places: c[6], pay: c[7], mark: c[8].trim(), note: c[9].trim() });
+    }
+  }
+  return sheets;
+}
+
+
+// ─── API и вход ───────────────────────────────────────────
+const AUTH_KEY = 'zm_token', USER_KEY = 'zm_user', LAST_KEY = 'zm_last';
+const Auth = {
+  token: null, user: null,
+  load() { try { this.token = localStorage.getItem(AUTH_KEY); this.user = JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch (_) {} },
+  save(token, user) { this.token = token; this.user = user; try { localStorage.setItem(AUTH_KEY, token); localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch (_) {} },
+  clear() { this.token = null; this.user = null; try { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(USER_KEY); } catch (_) {} },
+  isAdmin() { return !!this.user && this.user.role === 'admin'; }
+};
+Auth.load();
+
+async function api(path, { method = 'GET', body, auth = true } = {}) {
+  let res;
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (auth && Auth.token) headers['Authorization'] = 'Bearer ' + Auth.token;
+  try { res = await fetch(API_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch (e) { throw new Error('Нет связи с сервером'); }
+  let data = null;
+  try { data = await res.json(); } catch (_) {}
+  if (res.status === 401 && auth && Auth.token) {
+    Auth.clear(); showLogin((data && data.error) || 'Вход истёк, войдите снова');
+    throw new Error((data && data.error) || 'Нужно войти');
+  }
+  if (!res.ok || !data || data.success === false) {
+    const e = new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+    e.status = res.status; e.data = data; throw e;
+  }
+  return data;
+}
+
+// ─── утилиты ──────────────────────────────────────────────
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = v => v === null || v === undefined ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const num = v => Number(v) || 0;
+const money = v => Math.round(num(v)).toLocaleString('ru-RU');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmtDT = s => s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+let toastT;
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2400); }
+const todayStr = () => { const d = new Date(); return [String(d.getDate()).padStart(2, '0'), String(d.getMonth() + 1).padStart(2, '0'), d.getFullYear()].join('.'); };
+
+// ─── тема ─────────────────────────────────────────────────
+function drawTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  $('#theme').innerHTML = dark
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+}
+$('#theme').onclick = () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  if (dark) document.documentElement.dataset.theme = 'dark'; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('zm_theme', dark ? 'dark' : 'light'); } catch (_) {}
+  drawTheme();
+};
+drawTheme();
+
+// ─── экран входа ──────────────────────────────────────────
+const ROLE_RU = { admin: 'администратор', logist: 'логист' };
+const authBrand = `<div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.маршрути</span></b></div>`;
+function drawWho() {
+  const u = Auth.user;
+  $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
+  $('#nav-users').hidden = !Auth.isAdmin();
+}
+function showLogin(msg) {
+  document.body.classList.add('need-auth');
+  document.title = 'Вход — Зеніт-Авто.маршрути';
+  const box = $('#auth');
+  box.innerHTML = `<div class="auth-card">${authBrand}<div class="loading" style="padding:20px 0">Проверяю…</div></div>`;
+  api('/logist/auth/status', { auth: false })
+    .then(d => d.has_users ? drawLoginForm(msg) : drawSetupForm())
+    .catch(e => { box.innerHTML = `<div class="auth-card">${authBrand}<div class="err">${esc(e.message)}</div><button class="btn" type="button" id="auth-retry">Повторить</button></div>`; $('#auth-retry').onclick = () => showLogin(msg); });
+}
+function drawLoginForm(msg) {
+  $('#auth').innerHTML = `<form class="auth-card" id="login-form" novalidate>
+    ${authBrand}
+    <div class="auth-badge">Помощник логиста</div>
+    <h1>Вход</h1>
+    <p class="sub">Проверка маршрутных листов до проведения</p>
+    <label>Логин<input class="in" id="l-login" autocomplete="section-logist username" autocapitalize="none" spellcheck="false" required></label>
+    <label>Пароль<input class="in" id="l-pass" type="password" autocomplete="section-logist current-password" required></label>
+    <button class="btn pri" type="submit" id="l-go">Войти</button>
+    <div id="l-err"></div>
+  </form>`;
+  if (msg) $('#l-err').innerHTML = '<div class="note">' + esc(msg) + '</div>';
+  $('#login-form').onsubmit = async e => {
+    e.preventDefault();
+    const login = $('#l-login').value.trim(), password = $('#l-pass').value;
+    if (!login || !password) { $('#l-err').innerHTML = '<div class="err">Введите логин и пароль</div>'; return; }
+    const b = $('#l-go'); b.disabled = true; b.textContent = 'Входим…';
+    try {
+      const d = await api('/logist/auth/login', { method: 'POST', auth: false, body: { login, password, device: navigator.userAgent.slice(0, 120) } });
+      Auth.save(d.token, d.user); enterApp();
+    } catch (err) { $('#l-err').innerHTML = '<div class="err">' + esc(err.message) + '</div>'; b.disabled = false; b.textContent = 'Войти'; }
+  };
+  $('#l-login').focus();
+}
+function drawSetupForm() {
+  $('#auth').innerHTML = `<form class="auth-card" id="setup-form" novalidate>
+    ${authBrand}
+    <div class="auth-badge">Первый запуск</div>
+    <h1>Создайте администратора</h1>
+    <p class="sub">Пользователей ещё нет. Этот экран появляется один раз: логиста потом добавите в разделе «Пользователи».</p>
+    <label>Имя и фамилия<input class="in" id="s-name" autocomplete="name" required></label>
+    <label>Логин<input class="in" id="s-login" autocapitalize="none" spellcheck="false" placeholder="латиница, например admin" required></label>
+    <label>Пароль<input class="in" id="s-pass" type="password" autocomplete="new-password" placeholder="не меньше 6 символов" required></label>
+    <label>Пароль ещё раз<input class="in" id="s-pass2" type="password" autocomplete="new-password" required></label>
+    <button class="btn pri" type="submit" id="s-go">Создать и войти</button>
+    <div id="s-err"></div>
+  </form>`;
+  $('#setup-form').onsubmit = async e => {
+    e.preventDefault();
+    const full_name = $('#s-name').value.trim(), login = $('#s-login').value.trim().toLowerCase(), password = $('#s-pass').value;
+    const err = m => { $('#s-err').innerHTML = '<div class="err">' + esc(m) + '</div>'; };
+    if (password !== $('#s-pass2').value) return err('Пароли не совпадают');
+    const b = $('#s-go'); b.disabled = true;
+    try { const d = await api('/logist/auth/setup', { method: 'POST', auth: false, body: { full_name, login, password } }); Auth.save(d.token, d.user); enterApp(); toast('Администратор создан'); }
+    catch (ex) { err(ex.message); b.disabled = false; }
+  };
+  $('#s-name').focus();
+}
+function enterApp() {
+  document.body.classList.remove('need-auth');
+  document.title = 'Зеніт-Авто.маршрути — помощник логиста';
+  $('#auth').innerHTML = '';
+  drawWho(); route();
+}
+$('#logout').onclick = async () => {
+  if (!confirm('Выйти?')) return;
+  const t = Auth.token; Auth.clear();
+  try { await fetch(API_BASE + '/logist/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }); } catch (_) {}
+  showLogin();
+};
+
+// ─── разделы ──────────────────────────────────────────────
+function route() {
+  let r = (location.hash || '#check').slice(1);
+  if (r === 'users' && !Auth.isAdmin()) r = 'check';
+  $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
+  if (r !== 'check') Geo.pause = true;
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers }[r] || viewCheck)();
+}
+window.addEventListener('hashchange', () => { if (Auth.token) route(); });
+
+// ═══ Проверка листов ══════════════════════════════════════
+// Состояние текущего отчёта
+let R = null;          // ответ сервера: { report, marks, geo, zones, warehouse }
+let selSheet = null;   // номер выбранного листа или null — все
+let tab = 'err';       // err | all | info
+let map = null, layerZones = null, layerPts = null, manualFor = null;
+
+function viewCheck() {
+  $('#view').innerHTML = `
+    <div class="hd"><div><h1>Проверка маршрутных листов</h1><div class="sub">Сохраните листы из 1С в Excel <b>до своей проверки</b> и перетащите файл сюда</div></div></div>
+    <label class="drop" id="drop"><input type="file" id="file" accept=".xls,.xlsx" hidden>
+      <b>Перетащите Excel с маршрутными листами</b><span class="mu">или нажмите, чтобы выбрать файл (.xls, .xlsx)</span></label>
+    <div id="res"></div>`;
+  const drop = $('#drop'), inp = $('#file');
+  inp.onchange = () => inp.files[0] && loadFile(inp.files[0]);
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+  if (!R) { try { R = JSON.parse(localStorage.getItem(LAST_KEY) || 'null'); } catch (_) {} }
+  if (R) drawReport();
+}
+
+async function loadFile(f) {
+  const res = $('#res');
+  res.innerHTML = '<div class="loading">Читаю файл…</div>';
+  let sheets;
+  try {
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    let aoa = [];
+    for (const n of wb.SheetNames) aoa = aoa.concat(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true }));
+    sheets = parseRouteSheets(aoa);
+  } catch (e) { res.innerHTML = '<div class="err">Не удалось прочитать файл: ' + esc(e.message) + '</div>'; return; }
+  if (!sheets.length) { res.innerHTML = '<div class="err">В файле нет маршрутных листов. Нужна печатная форма «Маршрутний лист» из 1С, сохранённая в Excel.</div>'; return; }
+  res.innerHTML = `<div class="loading">Проверяю ${sheets.length} лист(ов)…</div>`;
+  try {
+    const d = await api('/logist/check', { method: 'POST', body: { file: f.name, sheets } });
+    Geo.stop();
+    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, file: f.name, at: Date.now() };
+    selSheet = null; tab = 'err';
+    saveLast();
+    drawReport();
+    $('#drop').classList.add('slim');
+    $('#drop').innerHTML = '<input type="file" id="file" accept=".xls,.xlsx" hidden><b>Загрузить другой файл</b><span class="mu">или перетащите сюда</span>';
+    $('#file').onchange = e => e.target.files[0] && loadFile(e.target.files[0]);
+  } catch (e) { res.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+}
+function saveLast() { try { localStorage.setItem(LAST_KEY, JSON.stringify(R)); } catch (_) {} }
+
+// ── зоны и статус адреса на карте ──
+const isSat = code => /^Хк(\(Л\))?-\d+$/.test(code);
+function inPoly(lat, lng, pts) { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [yi, xi] = pts[i], [yj, xj] = pts[j]; if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) c = !c; } return c; }
+function zonesAt(lat, lng, set) { return [...new Set(((R.zones || {})[set] || []).filter(z => inPoly(lat, lng, z[1])).map(z => z[0]))]; }
+// Статус строки по карте: { cls: pend|ok|okap|bad|wa|nf|none, text, issue? }
+function zoneStatus(s, r) {
+  if (s.type !== 'city' || !r.q) return { cls: 'none' };
+  const g = R.geo[r.q];
+  if (!g) return { cls: 'pend', text: 'ищу на карте…' };
+  const key = `${s.date}|${s.no}|${r.n}|`;
+  if (g.nf) return { cls: 'nf', text: 'Адрес не найден на карте', issue: { key: key + 'addr_nf', kind: 'addr_nf', sev: 'info', title: 'Адрес не найден на карте', text: `«${r.q}» — зона не проверена. Можно поставить точку вручную` } };
+  const sat = isSat(s.code), set = sat ? 'subbota' : 'budni';
+  const zs = zonesAt(g.lat, g.lng, set);
+  const exact = g.house || g.manual;
+  if (!zs.length) return { cls: 'wa', text: 'Точка вне зон на карте', issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: 'Точка вне зон на карте', text: `${g.label || r.q}` } };
+  if (zs.includes(s.code)) return { cls: exact ? 'ok' : 'okap', text: exact ? `В своей зоне ${s.code}` : `В своей зоне ${s.code} (найдено до улицы)` };
+  if (exact && (!sat || R.report.saturdayZonesConfirmed))
+    return { cls: 'bad', text: `Не та зона: ${zs.join(', ')}`, issue: { key: key + 'zone', kind: 'zone', sev: 'err', title: 'Не та зона', text: `Адрес в зоне ${zs.join(', ')}, а лист ${s.code}` + (g.manual ? ' (точка поставлена вручную)' : '') } };
+  return { cls: 'wa', text: `Примерно: ${zs.join(', ')}`, issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: exact ? 'Другая зона (суббота, карта не подтверждена)' : 'Зона примерно', text: `${exact ? 'Адрес' : 'Улица'} в зоне ${zs.join(', ')}, а лист ${s.code}` } };
+}
+const ZCOL = { ok: '#15803d', okap: '#15803d', bad: '#b42318', wa: '#d97706', nf: '#6b7280', pend: '#9ca3af' };
+function rowIssues(s, r) { const z = zoneStatus(s, r); return z.issue ? r.iss.concat([z.issue]) : r.iss; }
+
+// ── отчёт ──
+function counts() {
+  let rows = 0, err = 0, note = 0, cityQ = new Set(), found = 0;
+  for (const s of R.report.sheets) {
+    err += s.issues.filter(i => i.sev === 'err').length;
+    for (const r of s.rows) {
+      rows++; if (r.eff === 'note') note++;
+      err += rowIssues(s, r).filter(i => i.sev === 'err').length;
+      if (s.type === 'city' && r.q) cityQ.add(r.q);
+    }
+  }
+  cityQ.forEach(q => { if (R.geo[q]) found++; });
+  return { rows, err, note, q: cityQ.size, found };
+}
+function sheetErr(s) { return s.issues.filter(i => i.sev === 'err').length + s.rows.reduce((a, r) => a + rowIssues(s, r).filter(i => i.sev === 'err').length, 0); }
+
+function drawReport() {
+  const res = $('#res'); if (!res || !R) return;
+  const rep = R.report, c = counts();
+  const dates = [...new Set(rep.sheets.map(s => s.date))].join(', ');
+  res.innerHTML = `
+    <div class="geo-line"><span>Файл: <b>${esc(R.file || rep.file)}</b> · листы за ${esc(dates)}</span><span class="mu">${R.at ? 'проверено ' + fmtDT(R.at) : ''}</span></div>
+    <div class="kpi mt" id="kpi"></div>
+    <div class="work">
+      <div class="sheets" id="sheets"></div>
+      <div><div class="mapbox"><div id="map"></div><div class="map-hint" id="map-hint"><span id="map-hint-t">Кликните на карте место доставки</span><button type="button" id="map-hint-x">Отмена</button></div></div>
+        <div class="geo-line" id="geo-line"></div></div>
+    </div>
+    <div class="filters"><div class="tabs" id="tabs">
+      <button type="button" data-t="err">Ошибки</button><button type="button" data-t="all">Все накладные</button><button type="button" data-t="info">С пометками</button></div>
+      <span class="mu small" id="tab-note"></span></div>
+    <div class="tw"><table><thead><tr><th>№</th><th>Клиент</th><th>Адрес доставки</th><th class="nw">Сумма</th><th>Замечания</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+  $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; drawRows(); };
+  $('#map-hint-x').onclick = () => setManual(null);
+  drawKpi(); drawSheets(); initMap(); drawRows(); drawGeoLine();
+  Geo.start();
+}
+function drawKpi() {
+  const c = counts(), el = $('#kpi'); if (!el) return;
+  el.innerHTML = `<div><b>${R.report.sheets.length}</b>листов</div><div><b>${c.rows}</b>накладных</div>
+    <div class="${c.err ? 'er' : 'ok'}"><b>${c.err}</b>ошибок</div><div><b>${c.note}</b>по адресу из примечания</div>
+    <div><b>${c.found}/${c.q}</b>адресов Харькова на карте</div>`;
+}
+function drawSheets() {
+  const el = $('#sheets'); if (!el) return;
+  const all = R.report.sheets.reduce((a, s) => a + sheetErr(s), 0);
+  el.innerHTML = `<button type="button" class="sh ${selSheet === null ? 'on' : ''}" data-no=""><span class="t"><b>Все листы</b><span>${R.report.sheets.length} листов</span></span>${all ? `<span class="pill er">${all}</span>` : '<span class="pill ok">ок</span>'}</button>` +
+    R.report.sheets.map(s => { const e = sheetErr(s); const sumBad = s.issues.some(i => i.kind === 'sum');
+      return `<button type="button" class="sh ${selSheet === s.no ? 'on' : ''}" data-no="${esc(s.no)}"><span class="t"><b>${esc(s.code || s.route)}</b>
+      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} нак. · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || 'водитель не указан')}</span></span>
+      ${e ? `<span class="pill er">${e}</span>` : '<span class="pill ok">ок</span>'}</button>`; }).join('');
+  el.onclick = e => { const b = e.target.closest('.sh'); if (!b) return; selSheet = b.dataset.no || null; drawSheets(); drawRows(); drawMap(true); };
+}
+function visibleSheets() { return R.report.sheets.filter(s => selSheet === null || s.no === selSheet); }
+function drawRows() {
+  const tb = $('#rows'); if (!tb) return;
+  $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+  const out = [];
+  for (const s of visibleSheets()) {
+    const sheetIss = s.issues;
+    const list = s.rows.map(r => ({ r, iss: rowIssues(s, r), z: zoneStatus(s, r) })).filter(x =>
+      tab === 'all' || (tab === 'err' ? x.iss.some(i => i.sev === 'err') : x.iss.length > 0));
+    if (!list.length && !(sheetIss.length && tab !== 'info')) continue;
+    out.push(`<tr class="day"><td colspan="5">${esc(s.code || s.route)} · лист № ${esc(s.no)} от ${esc(s.date)} · ${esc(s.driver || '')} · ${money(s.total)} грн${s.brutto ? ' · ' + money(s.brutto) + ' кг' : ''}</td></tr>`);
+    for (const i of sheetIss) out.push(`<tr class="er-row"><td></td><td colspan="3"><b>Весь лист</b></td><td class="iss">${issHtml(i)}</td></tr>`);
+    for (const { r, iss, z } of list) {
+      const hasErr = iss.some(i => i.sev === 'err');
+      const addr = r.eff === 'note' ? `<span class="addr-note">из примечания</span>${esc(r.note)}<div class="mu small">в 1С: ${esc(r.addr)}</div>` : esc(r.addr) + (r.note ? `<div class="mu small">примечание: ${esc(r.note.slice(0, 140))}</div>` : '');
+      const geo = z.cls === 'none' ? '' : `<div class="geo-st ${{ ok: 'ok', okap: 'ok', bad: 'er', wa: 'wa', nf: 'mu', pend: 'mu' }[z.cls]}">● ${esc(z.text)}${z.cls === 'nf' || z.cls === 'wa' || z.cls === 'bad' || z.cls === 'okap' ? ` <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">Поставить на карте</button>` : ''}</div>`;
+      out.push(`<tr class="${hasErr ? 'er-row' : ''} click" data-pt="${esc(s.no)}|${r.n}"><td class="mu">${r.n}</td>
+        <td><b>${esc(r.client)}</b><div class="mu small">${esc(r.manager)}${r.inv ? ' · ' + esc(r.inv) : ''}</div></td>
+        <td>${addr}${geo}</td><td class="nw">${money(r.sum)}</td>
+        <td class="iss">${iss.length ? iss.map(issHtml).join('') : '<span class="mu">—</span>'}</td></tr>`);
+    }
+  }
+  tb.innerHTML = out.join('') || `<tr><td colspan="5" class="empty">${tab === 'err' ? 'Ошибок нет 👍' : 'Нет накладных'}</td></tr>`;
+  $('#tab-note').textContent = tab === 'err' ? 'Отметьте каждую ошибку: «Верно» или «Ложная тревога» — по этим отметкам считаем итоги пилота' : '';
+  tb.onclick = onRowsClick;
+  tb.onchange = onRowsChange;
+}
+function issHtml(i) {
+  const m = R.marks[i.key] || {};
+  const verd = i.sev === 'err' ? `<div class="verd" data-key="${esc(i.key)}">
+      <button class="btn sm ${m.verdict === 'ok' ? 'on-ok' : ''}" type="button" data-v="ok">Верно</button>
+      <button class="btn sm ${m.verdict === 'false' ? 'on-false' : ''}" type="button" data-v="false">Ложная тревога</button>
+      <input class="in" type="text" placeholder="комментарий" value="${esc(m.comment || '')}" data-c="1"></div>` : '';
+  return `<div class="isx ${i.sev === 'err' ? 'er' : 'inf'}"><div class="ttl">${esc(i.title)}</div><div class="txt">${esc(i.text)}</div>${verd}</div>`;
+}
+async function saveMark(key, verdict, comment) {
+  const prev = R.marks[key];
+  R.marks[key] = { verdict, comment }; saveLast();
+  try { await api('/logist/mark', { method: 'POST', body: { key, verdict: verdict || '', comment: comment || '' } }); }
+  catch (e) { R.marks[key] = prev; toast(e.message); drawRows(); }
+}
+function onRowsClick(e) {
+  const vb = e.target.closest('[data-v]');
+  if (vb) {
+    const box = vb.closest('.verd'), key = box.dataset.key, m = R.marks[key] || {};
+    const v = m.verdict === vb.dataset.v ? null : vb.dataset.v;
+    saveMark(key, v, box.querySelector('[data-c]').value.trim());
+    box.querySelectorAll('[data-v]').forEach(b => { b.classList.toggle('on-ok', b.dataset.v === 'ok' && v === 'ok'); b.classList.toggle('on-false', b.dataset.v === 'false' && v === 'false'); });
+    return;
+  }
+  const mb = e.target.closest('[data-manual]');
+  if (mb) { setManual(mb.dataset.manual); return; }
+  if (e.target.closest('input,button,a')) return;
+  const tr = e.target.closest('tr[data-pt]');
+  if (tr) focusPoint(tr.dataset.pt);
+}
+function onRowsChange(e) {
+  const c = e.target.closest('[data-c]'); if (!c) return;
+  const box = c.closest('.verd'), key = box.dataset.key, m = R.marks[key] || {};
+  saveMark(key, m.verdict || null, c.value.trim());
+  toast('Комментарий сохранён');
+}
+
+// ── карта ──
+function initMap() {
+  if (map) { map.remove(); map = null; }
+  map = L.map('map', { zoomControl: true }).setView([49.99, 36.27], 11);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }).addTo(map);
+  layerZones = L.layerGroup().addTo(map); layerPts = L.layerGroup().addTo(map);
+  if (R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(map).bindPopup('<b>Склад</b>');
+  map.on('click', ev => { if (manualFor) placeManual(ev.latlng); });
+  drawMap(true);
+}
+const ZPAL = ['#2563eb', '#7c3aed', '#0f766e', '#c2410c', '#be185d', '#4d7c0f', '#0369a1', '#a16207', '#9333ea', '#047857', '#b91c1c', '#1d4ed8'];
+function drawMap(fit) {
+  if (!map) return;
+  layerZones.clearLayers(); layerPts.clearLayers();
+  const vs = visibleSheets(), cityCodes = new Set(vs.filter(s => s.type === 'city').map(s => s.code));
+  const set = vs.some(s => s.type === 'city' && isSat(s.code)) && !vs.some(s => s.type === 'city' && !isSat(s.code)) ? 'subbota' : 'budni';
+  const zs = (R.zones || {})[set] || [], names = [...new Set(zs.map(z => z[0]))];
+  const bounds = [];
+  zs.forEach(z => {
+    const hi = selSheet === null ? cityCodes.has(z[0]) : cityCodes.has(z[0]);
+    const col = ZPAL[names.indexOf(z[0]) % ZPAL.length];
+    const p = L.polygon(z[1], { color: col, weight: hi ? 2.5 : 1, opacity: hi ? .9 : .35, fillOpacity: hi ? .1 : .03, interactive: false }).addTo(layerZones);
+    if (hi || selSheet === null) p.bindTooltip(z[0], { permanent: true, direction: 'center', className: 'zl' });
+    if (hi && selSheet !== null) bounds.push(...z[1]);
+  });
+  for (const s of vs) for (const r of s.rows) {
+    if (s.type !== 'city' || !r.q) continue;
+    const g = R.geo[r.q]; if (!g || g.nf) continue;
+    const z = zoneStatus(s, r);
+    const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: '', html: `<div class="mk" style="background:${ZCOL[z.cls] || '#6b7280'}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(layerPts);
+    m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}<br>${esc(r.q)}<br><span style="color:#6b7280">${esc(g.manual ? 'точка поставлена вручную' : 'найдено: ' + (g.label || ''))}</span><br><i>${esc(z.text || '')}</i>`);
+    m._pt = s.no + '|' + r.n; bounds.push([g.lat, g.lng]);
+  }
+  if (fit && bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+}
+function focusPoint(pt) {
+  let found = null; layerPts.eachLayer(m => { if (m._pt === pt) found = m; });
+  $$('#rows tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.pt === pt));
+  if (found) { map.setView(found.getLatLng(), 16); found.openPopup(); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+function findRow(pt) { const [no, n] = pt.split('|'); const s = R.report.sheets.find(x => x.no === no); return s ? { s, r: s.rows.find(x => String(x.n) === n) } : {}; }
+function setManual(pt) {
+  manualFor = pt;
+  $('#map-hint').classList.toggle('on', !!pt);
+  if (pt) { const { r } = findRow(pt); $('#map-hint-t').textContent = 'Кликните на карте: ' + (r ? r.client.slice(0, 40) : ''); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+async function placeManual(ll) {
+  const { s, r } = findRow(manualFor); setManual(null);
+  if (!r || !r.q) return;
+  R.geo[r.q] = { lat: ll.lat, lng: ll.lng, house: true, manual: true, label: 'поставлено вручную', src: 'логист', nf: false };
+  saveLast(); refreshAll();
+  await Geo.send([r.q]);
+  toast('Точка сохранена — для этого адреса больше не ищем');
+}
+function refreshAll() {
+  drawKpi(); drawSheets(); drawMap(false); drawGeoLine();
+  const a = document.activeElement;                 // не мешаем печатать комментарий
+  if (!(a && a.closest && a.closest('#rows') && a.tagName === 'INPUT')) drawRows();
+}
+function drawGeoLine() {
+  const el = $('#geo-line'); if (!el) return;
+  const c = counts();
+  el.innerHTML = c.q ? (Geo.running ? `<span class="prog wide"><i style="width:${Math.round(c.found / c.q * 100)}%"></i></span><span>Ищу адреса на карте: ${c.found} из ${c.q}</span>`
+    : `<span>Адреса Харькова на карте: ${c.found} из ${c.q}${c.found < c.q ? ' · ' : ''}</span>${c.found < c.q ? '<button class="btn sm" type="button" id="geo-go">Продолжить поиск</button>' : ''}`) : '<span>Городских адресов для карты нет</span>';
+  const b = $('#geo-go'); if (b) b.onclick = () => Geo.start();
+}
+
+// ── поиск адресов (в браузере, бесплатные сервисы, не чаще 1 запроса в секунду) ──
+const TYPES = /^(вулиця|вул|улица|ул|проспект|просп|пр|провулок|пров|переулок|пер|шосе|шлях|бульвар|набережна|наб|площа|узвіз|в.їзд|проїзд|проезд|street|st|lane|avenue|ave|boulevard|blvd|road|highway|square|provulok|vulytsia|prospekt|харків|харьков|kharkiv)$/;
+const LAT = { а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'e', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ь: '', ъ: '', ы: 'y', э: 'e', ю: 'iu', я: 'ia', ё: 'e', "'": '', '’': '', 'ʼ': '' };
+const lat = s => s.toLowerCase().split('').map(c => LAT[c] ?? c).join('').replace(/[^a-z0-9 ]/g, '').replace(/kh/g, 'h').replace(/iy|yi|ii/g, 'i').replace(/y/g, 'i');
+function core(s) {
+  s = String(s || '').replace(/,?\s*Харків\s*$/i, '');
+  const ord = /(\d+)-/.test(s) ? s.match(/(\d+)-/)[1] : '';
+  const words = s.split(/[\s,.]+/).filter(w => w && !/^\d/.test(w) && !TYPES.test(w.toLowerCase().replace(/[^а-яіїєґa-z.]/g, '').replace(/\.$/, '')));
+  const w = words.map(lat).filter(x => x.length >= 3).sort((a, b) => b.length - a.length)[0] || '';
+  return { w, ord };
+}
+function same(q, street) {   // защита: принимаем результат, только если найдена та же улица
+  const a = core(q), b = core(street); if (!a.w || !b.w) return false;
+  const k = Math.min(5, a.w.length, b.w.length);
+  if (a.w.slice(0, k) !== b.w.slice(0, k)) return false;
+  if (a.ord && b.ord && a.ord !== b.ord) return false;
+  if (a.ord && !b.ord && /^\d/.test(street)) return false;
+  return true;
+}
+async function photon(q) {
+  const r = await fetch('https://photon.komoot.io/api/?limit=3&lang=default&bbox=36.05,49.86,36.52,50.12&q=' + encodeURIComponent(q));
+  const d = await r.json();
+  return (d.features || []).map(f => { const p = f.properties; return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], house: !!p.housenumber, street: p.street || p.name || '', label: [p.street || p.name, p.housenumber].filter(Boolean).join(', '), src: 'Photon' }; });
+}
+async function nominatim(q) {
+  const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=3&accept-language=uk&addressdetails=1&countrycodes=ua&viewbox=36.05,50.12,36.52,49.86&bounded=1&q=' + encodeURIComponent(q));
+  const d = await r.json();
+  return d.map(x => { const a = x.address || {}; return { lat: +x.lat, lng: +x.lon, house: !!a.house_number, street: a.road || '', label: [a.road, a.house_number].filter(Boolean).join(', ') || x.display_name.split(',').slice(0, 2).join(','), src: 'Nominatim' }; });
+}
+async function geocode(q) {
+  let cand = [];
+  try { cand = cand.concat(await photon(q)); } catch (_) {}
+  let best = cand.find(c => c.house && same(q, c.street));
+  if (!best) {
+    await sleep(1100);
+    try { cand = cand.concat(await nominatim(q)); } catch (_) {}
+    best = cand.find(c => c.house && same(q, c.street)) || cand.find(c => same(q, c.street));
+  }
+  return best ? { lat: best.lat, lng: best.lng, house: best.house, label: best.label, src: best.src, nf: false } : { nf: true, label: cand[0] ? 'сервис предложил: ' + cand[0].label : '' };
+}
+const Geo = {
+  running: false, pause: false, run: 0,
+  stop() { this.run++; this.running = false; },
+  async start() {
+    if (!R) return;
+    const my = ++this.run; this.running = true; this.pause = false;
+    // сначала сохраняем зоны по уже известным адресам
+    await this.send(null);
+    const qs = [...new Set(R.report.sheets.filter(s => s.type === 'city').flatMap(s => s.rows.map(r => r.q)).filter(q => q && !R.geo[q]))];
+    let batch = [];
+    for (const q of qs) {
+      if (my !== this.run || this.pause) break;
+      R.geo[q] = await geocode(q);
+      if (my !== this.run) return;
+      batch.push(q);
+      refreshAll();
+      if (batch.length >= 5) { this.send(batch); batch = []; }
+      await sleep(1100);
+    }
+    if (my !== this.run) return;
+    this.running = false;
+    if (batch.length) await this.send(batch);
+    saveLast(); refreshAll();
+  },
+  // отправить найденные точки и результат проверки зон по затронутым накладным (q = null — по всем)
+  async send(qs) {
+    if (!R) return;
+    const set = qs ? new Set(qs) : null, items = [], rows = [], zone = [];
+    if (qs) qs.forEach(q => { const g = R.geo[q]; if (g) items.push({ q, ...g }); });
+    for (const s of R.report.sheets) for (const r of s.rows) {
+      if (s.type !== 'city' || !r.q || !R.geo[r.q] || (set && !set.has(r.q))) continue;
+      rows.push({ date: s.date, no: s.no, n: r.n });
+      const z = zoneStatus(s, r);
+      if (z.issue) zone.push({ date: s.date, no: s.no, n: r.n, ...z.issue });
+    }
+    if (!items.length && !rows.length) return;
+    try { await api('/logist/geo', { method: 'POST', body: { items, rows, zone } }); } catch (e) { if (e.status !== 401) toast('Не удалось сохранить точки: ' + e.message); }
+  }
+};
+
+// ═══ Исправить адрес в 1С ═════════════════════════════════
+let fixDays = 7, fixItems = [];
+async function viewFix() {
+  $('#view').innerHTML = `<div class="hd"><div><h1>Исправить основной адрес в 1С</h1><div class="sub">Клиенты, у которых основной адрес неполный или не по маршруту, а правильный менеджер вписывает в примечание</div></div>
+    <div class="bar"><select class="in" id="fix-days"><option value="7">за 7 дней</option><option value="14">за 14 дней</option><option value="30">за 30 дней</option></select>
+    <button class="btn" type="button" id="fix-xls">Скачать Excel</button></div></div><div id="fix-res"><div class="loading">Загружаю…</div></div>`;
+  $('#fix-days').value = String(fixDays);
+  $('#fix-days').onchange = e => { fixDays = +e.target.value; viewFix(); };
+  $('#fix-xls').onclick = () => {
+    if (!fixItems.length) return toast('Список пуст');
+    const ws = XLSX.utils.json_to_sheet(fixItems.map(x => ({ 'Менеджер': x.manager, 'Клиент': x.client, 'Адрес в 1С': x.addr, 'Адрес из примечания': x.note, 'Что не так': x.why, 'Раз за период': x.times, 'Последний лист': x.last_date, 'Маршруты': x.routes })));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Исправить адрес');
+    XLSX.writeFile(wb, `Исправить_адрес_в_1С_${todayStr()}.xlsx`);
+  };
+  try {
+    const d = await api('/logist/fix?days=' + fixDays);
+    fixItems = d.items || [];
+    $('#fix-res').innerHTML = fixItems.length ? `<div class="tw"><table><thead><tr><th>Менеджер</th><th>Клиент</th><th>Адрес в 1С</th><th>Адрес из примечания</th><th>Раз</th><th>Последний</th><th>Маршрут</th></tr></thead><tbody>
+      ${fixItems.map(x => `<tr><td>${esc(x.manager)}</td><td><b>${esc(x.client)}</b></td><td>${esc(x.addr)}<div class="mu small">${esc(x.why)}</div></td><td>${esc(x.note)}</td><td>${x.times}</td><td class="nw">${esc(x.last_date)}</td><td>${esc(x.routes)}</td></tr>`).join('')}
+      </tbody></table></div>` : '<div class="empty card">За этот период таких клиентов нет</div>';
+  } catch (e) { $('#fix-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+}
+
+// ═══ Итоги пилота ═════════════════════════════════════════
+async function viewStats(body) {
+  if (!body) $('#view').innerHTML = `<div class="hd"><div><h1>Итоги пилота</h1><div class="sub">Ошибки по дням, отметки логиста и время на проверку</div></div></div>
+    <div class="panel"><h2>Время на проверку листов</h2>
+      <form class="timef" id="time-f"><label>День<input class="in" type="date" id="t-day"></label>
+      <label>Минут<input class="in" type="number" min="0" max="1440" id="t-min" style="width:110px"></label>
+      <label class="ck"><input type="checkbox" id="t-help" checked> с помощником</label>
+      <button class="btn pri" type="submit">Сохранить</button></form>
+      <div class="mu small" style="margin-top:8px">Записывайте каждый день, сколько минут ушло на проверку листов. Дни без помощника (до пилота) — без галочки.</div></div>
+    <div id="st-res"><div class="loading">Загружаю…</div></div>`;
+  const dd = new Date(); $('#t-day').value = dd.toISOString().slice(0, 10);
+  $('#time-f').onsubmit = e => {
+    e.preventDefault();
+    const [y, m, d] = $('#t-day').value.split('-');
+    const mins = $('#t-min').value;
+    viewStats({ days: 60, time: { day: `${d}.${m}.${y}`, minutes: mins === '' ? '' : String(parseInt(mins, 10)), with_helper: $('#t-help').checked } });
+  };
+  try {
+    const d = await api('/logist/stats', { method: 'POST', body: body || { days: 60 } });
+    if (body && body.time) toast('Время сохранено');
+    const days = d.days || [];
+    const tot = days.reduce((a, x) => { a.sheets += num(x.sheets); a.rows += num(x.rows); a.errors += num(x.errors); a.ok += num(x.ok); a.f += num(x.false); return a; }, { sheets: 0, rows: 0, errors: 0, ok: 0, f: 0 });
+    const marked = tot.ok + tot.f, falsePct = marked ? Math.round(tot.f / marked * 100) : null;
+    const avg = flag => { const xs = days.filter(x => x.minutes !== null && x.minutes !== undefined && !!x.with_helper === flag); return xs.length ? Math.round(xs.reduce((a, x) => a + num(x.minutes), 0) / xs.length) : null; };
+    const KIND = { route_np: 'не тот НП', addr_bad: 'неполный адрес', sum: 'мало суммы', stop: 'не отгружать', zone: 'не та зона' };
+    $('#st-res').innerHTML = `<div class="kpi"><div><b>${tot.sheets}</b>листов проверено</div><div class="${tot.errors ? 'er' : ''}"><b>${tot.errors}</b>ошибок найдено</div>
+      <div class="ok"><b>${tot.ok}</b>подтверждено</div><div class="${falsePct !== null && falsePct >= 30 ? 'er' : ''}"><b>${falsePct === null ? '—' : falsePct + '%'}</b>ложных тревог (цель &lt; 30%)</div>
+      <div><b>${avg(false) ?? '—'} → ${avg(true) ?? '—'}</b>мин в день: без помощника → с ним</div></div>
+      <div class="tw"><table><thead><tr><th>День</th><th>Листов</th><th>Накладных</th><th>Ошибок</th><th>По видам</th><th>Верно</th><th>Ложных</th><th>Не отмечено</th><th>Минут</th></tr></thead><tbody>
+      ${days.map(x => `<tr><td class="nw">${esc(x.day.split('-').reverse().join('.'))}</td><td>${x.sheets}</td><td>${x.rows}</td><td>${x.errors}</td>
+        <td class="small">${Object.entries(x.by_kind || {}).map(([k, v]) => esc(KIND[k] || k) + ': ' + v).join(', ') || '—'}</td>
+        <td>${x.ok}</td><td>${x.false}</td><td>${Math.max(0, num(x.errors) - num(x.ok) - num(x.false))}</td>
+        <td>${x.minutes ?? '—'}${x.minutes !== null && x.minutes !== undefined ? (x.with_helper ? '' : ' <span class="pill">без помощника</span>') : ''}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  } catch (e) { $('#st-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+}
+
+// ═══ Пользователи (только администратор) ═════════════════
+function genPassword() { const abc = 'abcdefghjkmnpqrstuvwxyz23456789'; const a = new Uint32Array(8); crypto.getRandomValues(a); return Array.from(a, x => abc[x % abc.length]).join(''); }
+async function viewUsers(d) {
+  if (!d) {
+    $('#view').innerHTML = `<div class="hd"><div><h1>Пользователи</h1><div class="sub">Логисты и администраторы помощника. Отдельно от «Зеніт-Авто.фото»</div></div></div>
+      <div class="panel"><h2>Добавить</h2><form class="form" id="u-f">
+        <label>Имя и фамилия<input class="in" id="u-name" required></label>
+        <label>Логин<input class="in" id="u-login" autocapitalize="none" spellcheck="false" placeholder="латиница" required></label>
+        <label>Пароль<span class="pass"><input class="in" id="u-pass" required><button class="btn sm" type="button" id="u-gen">Придумать</button></span></label>
+        <label>Роль<select class="in" id="u-role"><option value="logist">логист</option><option value="admin">администратор</option></select></label>
+      </form><button class="btn pri" type="button" id="u-add">Добавить</button><div id="u-creds" class="mt"></div></div>
+      <div id="u-res"><div class="loading">Загружаю…</div></div>`;
+    $('#u-pass').value = genPassword();
+    $('#u-gen').onclick = () => { $('#u-pass').value = genPassword(); };
+    $('#u-add').onclick = async () => {
+      const body = { action: 'create', full_name: $('#u-name').value.trim(), login: $('#u-login').value.trim().toLowerCase(), password: $('#u-pass').value, role: $('#u-role').value };
+      try { const r = await api('/logist/admin/user-action', { method: 'POST', body });
+        $('#u-creds').innerHTML = `<div class="creds">Готово. Передайте: ссылка <code>${esc(location.href.split('#')[0])}</code> · логин <code>${esc(body.login)}</code> · пароль <code>${esc(body.password)}</code></div>`;
+        $('#u-name').value = ''; $('#u-login').value = ''; $('#u-pass').value = genPassword(); drawUsers(r.users);
+      } catch (e) { $('#u-creds').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+    };
+  }
+  try { const r = await api('/logist/admin/users'); drawUsers(r.users); } catch (e) { $('#u-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+}
+function drawUsers(list) {
+  $('#u-res').innerHTML = `<div class="tw"><table><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Был</th><th>Статус</th><th></th></tr></thead><tbody>
+    ${list.map(u => `<tr><td><b>${esc(u.full_name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(ROLE_RU[u.role] || u.role)}</td><td>${fmtDT(u.last_seen_at)}</td>
+      <td>${u.is_active ? '<span class="pill ok">активен</span>' : '<span class="pill er">заблокирован</span>'}</td>
+      <td><span class="uacts"><button class="btn sm" type="button" data-ua="password" data-id="${u.id}">Новый пароль</button>
+      ${Auth.user && u.id === Auth.user.id ? '' : `<button class="btn sm" type="button" data-ua="${u.is_active ? 'block' : 'unblock'}" data-id="${u.id}">${u.is_active ? 'Заблокировать' : 'Разблокировать'}</button>`}</span></td></tr>`).join('')}
+    </tbody></table></div>`;
+  $('#u-res').onclick = async e => {
+    const b = e.target.closest('[data-ua]'); if (!b) return;
+    const body = { action: b.dataset.ua, id: b.dataset.id };
+    if (body.action === 'password') { body.password = genPassword(); if (!confirm('Задать новый пароль? Старый перестанет работать.')) return; }
+    else if (!confirm(body.action === 'block' ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?')) return;
+    try { const r = await api('/logist/admin/user-action', { method: 'POST', body }); drawUsers(r.users);
+      if (body.password) $('#u-creds').innerHTML = `<div class="creds">Новый пароль: <code>${esc(body.password)}</code> — передайте пользователю</div>`;
+    } catch (ex) { toast(ex.message); }
+  };
+}
+
+// ─── запуск ───────────────────────────────────────────────
+$('#ver').textContent = 'версия ' + APP_VERSION;
+async function boot() {
+  if (!Auth.token) return showLogin();
+  drawWho();
+  try { const d = await api('/logist/auth/me'); Auth.save(Auth.token, d.user); enterApp(); }
+  catch (e) { if (!Auth.token) return; if (e.status === 403) { Auth.clear(); return showLogin(e.message); } enterApp(); }
+}
+boot();
+</script>
+</body>
+</html>
