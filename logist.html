@@ -148,6 +148,14 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 .sh .t b .sw, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
 .mk.num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 11px "Golos Text", sans-serif; }
 .km { color: var(--tx); font-weight: 600; }
+.lsw { display: inline-flex; border: 1px solid var(--bd); border-radius: 999px; overflow: hidden; flex: none; vertical-align: middle; }
+.lsw button { border: 0; background: none; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--mu); cursor: pointer; }
+.lsw button.on { background: var(--or); color: var(--on-or); }
+.help { max-width: 860px; }
+.help h2 { font-size: 17px; margin: 22px 0 8px; }
+.help ol, .help ul { margin: 0; padding-left: 22px; }
+.help li { margin: 6px 0; }
+.help .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--bd); }
 tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
 .drop { display: block; border: 2px dashed var(--bd); border-radius: 14px; padding: 30px 20px; text-align: center; background: var(--sf); cursor: pointer; }
 .drop:hover, .drop.over { border-color: var(--or); background: var(--or-soft); }
@@ -215,15 +223,16 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 <header class="top">
   <span class="logo"><svg viewBox="0 0 384 462" role="img" aria-label="Зеніт-Авто"><use href="#logo"/></svg></span>
   <b>Зеніт-Авто<span>.маршрути</span></b>
-  <span class="who"><button class="btn sm thm" type="button" id="theme" aria-label="Сменить тему"></button><span id="who"></span><button class="btn sm" type="button" id="logout">Выйти</button></span>
+  <span class="who"><span id="lsw-top"></span><button class="btn sm thm" type="button" id="theme"></button><span id="who"></span><button class="btn sm" type="button" id="logout"></button></span>
 </header>
 
 <div class="layout">
-  <nav class="side" aria-label="Разделы">
-    <a href="#check" data-nav="check">Проверка листов</a>
-    <a href="#fix" data-nav="fix">Исправить адрес в 1С</a>
-    <a href="#stats" data-nav="stats">Итоги пилота</a>
-    <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
+  <nav class="side">
+    <a href="#check" data-nav="check"></a>
+    <a href="#fix" data-nav="fix"></a>
+    <a href="#stats" data-nav="stats"></a>
+    <a href="#help" data-nav="help"></a>
+    <a href="#users" data-nav="users" id="nav-users" hidden></a>
     <div class="ver" id="ver"></div>
   </nav>
   <main id="view" tabindex="-1"></main>
@@ -233,7 +242,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm3';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm4';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -266,6 +275,40 @@ function parseRouteSheets(aoa) {
 }
 
 
+// ─── язык: украинский / русский ───────────────────────────
+const LANG_KEY = 'zm_lang';
+let lang = (() => { try { return localStorage.getItem(LANG_KEY) === 'ru' ? 'ru' : 'uk'; } catch (_) { return 'uk'; } })();
+document.documentElement.lang = lang;
+const T = (ru, uk) => lang === 'uk' ? uk : ru;
+const TI = (o, f) => lang === 'uk' && o[f + '_uk'] ? o[f + '_uk'] : o[f];   // поле с переводом от сервера
+const lswHtml = () => `<span class="lsw"><button type="button" data-lang="uk" class="${lang === 'uk' ? 'on' : ''}">UA</button><button type="button" data-lang="ru" class="${lang === 'ru' ? 'on' : ''}">RU</button></span>`;
+function drawChrome() {
+  const N = { check: T('Проверка листов', 'Перевірка листів'), fix: T('Исправить адрес в 1С', 'Виправити адресу в 1С'), stats: T('Итоги пилота', 'Підсумки пілоту'),
+    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі') };
+  $$('.side a[data-nav]').forEach(a => { a.textContent = N[a.dataset.nav]; });
+  $('.side').setAttribute('aria-label', T('Разделы', 'Розділи'));
+  $('#logout').textContent = T('Выйти', 'Вийти');
+  $('#theme').setAttribute('aria-label', T('Сменить тему', 'Змінити тему'));
+  $('#lsw-top').innerHTML = lswHtml();
+  $('#ver').textContent = T('версия ', 'версія ') + APP_VERSION;
+}
+function setLang(l) {
+  lang = l; document.documentElement.lang = l;
+  try { localStorage.setItem(LANG_KEY, l); } catch (_) {}
+  drawChrome();
+  if (document.body.classList.contains('need-auth')) showLogin(); else { drawWho(); route(); }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-lang]'); if (b && b.dataset.lang !== lang) setLang(b.dataset.lang); });
+// сообщения сервера приходят по-русски — переводим известные
+const SRV_UK = { 'Нужно войти': 'Потрібно увійти', 'Вход истёк, войдите снова': 'Вхід закінчився, увійдіть знову', 'Учётная запись заблокирована': 'Обліковий запис заблоковано',
+  'Недостаточно прав': 'Недостатньо прав', 'Неверный логин или пароль': 'Невірний логін або пароль',
+  'Администратор уже создан. Войдите со своим логином': 'Адміністратора вже створено. Увійдіть зі своїм логіном',
+  'Логин: 3–32 символа, латиница, цифры, точка, дефис': 'Логін: 3–32 символи, латиниця, цифри, крапка, дефіс', 'Укажите имя': 'Вкажіть імʼя',
+  'Неизвестная роль': 'Невідома роль', 'Пароль — не меньше 6 символов': 'Пароль — щонайменше 6 символів', 'Такой логин уже есть': 'Такий логін уже є',
+  'Себя заблокировать нельзя': 'Себе заблокувати не можна', 'Неизвестное действие': 'Невідома дія', 'Не указан день': 'Не вказано день', 'Нет замечания': 'Немає зауваження',
+  'В файле не найдено ни одного маршрутного листа': 'У файлі не знайдено жодного маршрутного листа', 'Пустой ответ базы': 'Порожня відповідь бази' };
+const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
+
 // ─── API и вход ───────────────────────────────────────────
 const AUTH_KEY = 'zm_token', USER_KEY = 'zm_user', LAST_KEY = 'zm_last';
 const Auth = {
@@ -283,15 +326,15 @@ async function api(path, { method = 'GET', body, auth = true } = {}) {
   if (body) headers['Content-Type'] = 'application/json';
   if (auth && Auth.token) headers['Authorization'] = 'Bearer ' + Auth.token;
   try { res = await fetch(API_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
-  catch (e) { throw new Error('Нет связи с сервером'); }
+  catch (e) { throw new Error(T('Нет связи с сервером', 'Немає звʼязку з сервером')); }
   let data = null;
   try { data = await res.json(); } catch (_) {}
   if (res.status === 401 && auth && Auth.token) {
-    Auth.clear(); showLogin((data && data.error) || 'Вход истёк, войдите снова');
-    throw new Error((data && data.error) || 'Нужно войти');
+    Auth.clear(); showLogin(trSrv((data && data.error) || 'Вход истёк, войдите снова'));
+    throw new Error(trSrv((data && data.error) || 'Нужно войти'));
   }
   if (!res.ok || !data || data.success === false) {
-    const e = new Error((data && data.error) || ('Ошибка сервера: ' + res.status));
+    const e = new Error(trSrv(data && data.error) || (T('Ошибка сервера: ', 'Помилка сервера: ') + res.status));
     e.status = res.status; e.data = data; throw e;
   }
   return data;
@@ -306,7 +349,7 @@ const money = v => Math.round(num(v)).toLocaleString('ru-RU');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const fmtDT = s => s ? new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 // диалог вместо confirm(): ask({ title, text, ok, danger, extra }) → Promise<false | { checked }>
-function ask({ title, text = '', ok = 'Да', cancel = 'Отмена', danger = false, check = '' }) {
+function ask({ title, text = '', ok = T('Да', 'Так'), cancel = T('Отмена', 'Скасувати'), danger = false, check = '' }) {
   return new Promise(resolve => {
     const ov = document.createElement('div');
     ov.className = 'xov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
@@ -346,78 +389,78 @@ $('#theme').onclick = () => {
 drawTheme();
 
 // ─── экран входа ──────────────────────────────────────────
-const ROLE_RU = { admin: 'администратор', logist: 'логист' };
-const authBrand = `<div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.маршрути</span></b></div>`;
+const roleName = r => ({ admin: T('администратор', 'адміністратор'), logist: T('логист', 'логіст') }[r] || r);
+const authBrand = () => `<span class="lsw-wrap" style="float:right">${lswHtml()}</span><div class="auth-brand"><span class="logo"><svg viewBox="0 0 384 462" aria-hidden="true"><use href="#logo"/></svg></span><b>Зеніт-Авто<span>.маршрути</span></b></div>`;
 function drawWho() {
   const u = Auth.user;
-  $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
+  $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(roleName(u.role)) : '';
   $('#nav-users').hidden = !Auth.isAdmin();
 }
 function showLogin(msg) {
   document.body.classList.add('need-auth');
-  document.title = 'Вход — Зеніт-Авто.маршрути';
+  document.title = T('Вход', 'Вхід') + ' — Зеніт-Авто.маршрути';
   const box = $('#auth');
-  box.innerHTML = `<div class="auth-card">${authBrand}<div class="loading" style="padding:20px 0">Проверяю…</div></div>`;
+  box.innerHTML = `<div class="auth-card">${authBrand()}<div class="loading" style="padding:20px 0">${T('Проверяю…', 'Перевіряю…')}</div></div>`;
   api('/logist/auth/status', { auth: false })
     .then(d => d.has_users ? drawLoginForm(msg) : drawSetupForm())
-    .catch(e => { box.innerHTML = `<div class="auth-card">${authBrand}<div class="err">${esc(e.message)}</div><button class="btn" type="button" id="auth-retry">Повторить</button></div>`; $('#auth-retry').onclick = () => showLogin(msg); });
+    .catch(e => { box.innerHTML = `<div class="auth-card">${authBrand()}<div class="err">${esc(e.message)}</div><button class="btn" type="button" id="auth-retry">${T('Повторить', 'Повторити')}</button></div>`; $('#auth-retry').onclick = () => showLogin(msg); });
 }
 function drawLoginForm(msg) {
   $('#auth').innerHTML = `<form class="auth-card" id="login-form" novalidate>
-    ${authBrand}
-    <div class="auth-badge">Помощник логиста</div>
-    <h1>Вход</h1>
-    <p class="sub">Проверка маршрутных листов до проведения</p>
-    <label>Логин<input class="in" id="l-login" autocomplete="section-logist username" autocapitalize="none" spellcheck="false" required></label>
-    <label>Пароль<input class="in" id="l-pass" type="password" autocomplete="section-logist current-password" required></label>
-    <button class="btn pri" type="submit" id="l-go">Войти</button>
+    ${authBrand()}
+    <div class="auth-badge">${T('Помощник логиста', 'Помічник логіста')}</div>
+    <h1>${T('Вход', 'Вхід')}</h1>
+    <p class="sub">${T('Проверка маршрутных листов до проведения', 'Перевірка маршрутних листів до проведення')}</p>
+    <label>${T('Логин', 'Логін')}<input class="in" id="l-login" autocomplete="section-logist username" autocapitalize="none" spellcheck="false" required></label>
+    <label>${T('Пароль', 'Пароль')}<input class="in" id="l-pass" type="password" autocomplete="section-logist current-password" required></label>
+    <button class="btn pri" type="submit" id="l-go">${T('Войти', 'Увійти')}</button>
     <div id="l-err"></div>
   </form>`;
   if (msg) $('#l-err').innerHTML = '<div class="note">' + esc(msg) + '</div>';
   $('#login-form').onsubmit = async e => {
     e.preventDefault();
     const login = $('#l-login').value.trim(), password = $('#l-pass').value;
-    if (!login || !password) { $('#l-err').innerHTML = '<div class="err">Введите логин и пароль</div>'; return; }
-    const b = $('#l-go'); b.disabled = true; b.textContent = 'Входим…';
+    if (!login || !password) { $('#l-err').innerHTML = '<div class="err">' + T('Введите логин и пароль', 'Введіть логін і пароль') + '</div>'; return; }
+    const b = $('#l-go'); b.disabled = true; b.textContent = T('Входим…', 'Входимо…');
     try {
       const d = await api('/logist/auth/login', { method: 'POST', auth: false, body: { login, password, device: navigator.userAgent.slice(0, 120) } });
       Auth.save(d.token, d.user); enterApp();
-    } catch (err) { $('#l-err').innerHTML = '<div class="err">' + esc(err.message) + '</div>'; b.disabled = false; b.textContent = 'Войти'; }
+    } catch (err) { $('#l-err').innerHTML = '<div class="err">' + esc(err.message) + '</div>'; b.disabled = false; b.textContent = T('Войти', 'Увійти'); }
   };
   $('#l-login').focus();
 }
 function drawSetupForm() {
   $('#auth').innerHTML = `<form class="auth-card" id="setup-form" novalidate>
-    ${authBrand}
-    <div class="auth-badge">Первый запуск</div>
-    <h1>Создайте администратора</h1>
-    <p class="sub">Пользователей ещё нет. Этот экран появляется один раз: логиста потом добавите в разделе «Пользователи».</p>
-    <label>Имя и фамилия<input class="in" id="s-name" autocomplete="name" required></label>
-    <label>Логин<input class="in" id="s-login" autocapitalize="none" spellcheck="false" placeholder="латиница, например admin" required></label>
-    <label>Пароль<input class="in" id="s-pass" type="password" autocomplete="new-password" placeholder="не меньше 6 символов" required></label>
-    <label>Пароль ещё раз<input class="in" id="s-pass2" type="password" autocomplete="new-password" required></label>
-    <button class="btn pri" type="submit" id="s-go">Создать и войти</button>
+    ${authBrand()}
+    <div class="auth-badge">${T('Первый запуск', 'Перший запуск')}</div>
+    <h1>${T('Создайте администратора', 'Створіть адміністратора')}</h1>
+    <p class="sub">${T('Пользователей ещё нет. Этот экран появляется один раз: логиста потом добавите в разделе «Пользователи».', 'Користувачів ще немає. Цей екран зʼявляється один раз: логіста потім додасте в розділі «Користувачі».')}</p>
+    <label>${T('Имя и фамилия', 'Імʼя та прізвище')}<input class="in" id="s-name" autocomplete="name" required></label>
+    <label>${T('Логин', 'Логін')}<input class="in" id="s-login" autocapitalize="none" spellcheck="false" placeholder="${T('латиница, например admin', 'латиниця, наприклад admin')}" required></label>
+    <label>Пароль<input class="in" id="s-pass" type="password" autocomplete="new-password" placeholder="${T('не меньше 6 символов', 'щонайменше 6 символів')}" required></label>
+    <label>${T('Пароль ещё раз', 'Пароль ще раз')}<input class="in" id="s-pass2" type="password" autocomplete="new-password" required></label>
+    <button class="btn pri" type="submit" id="s-go">${T('Создать и войти', 'Створити й увійти')}</button>
     <div id="s-err"></div>
   </form>`;
   $('#setup-form').onsubmit = async e => {
     e.preventDefault();
     const full_name = $('#s-name').value.trim(), login = $('#s-login').value.trim().toLowerCase(), password = $('#s-pass').value;
     const err = m => { $('#s-err').innerHTML = '<div class="err">' + esc(m) + '</div>'; };
-    if (password !== $('#s-pass2').value) return err('Пароли не совпадают');
+    if (password !== $('#s-pass2').value) return err(T('Пароли не совпадают', 'Паролі не збігаються'));
     const b = $('#s-go'); b.disabled = true;
-    try { const d = await api('/logist/auth/setup', { method: 'POST', auth: false, body: { full_name, login, password } }); Auth.save(d.token, d.user); enterApp(); toast('Администратор создан'); }
+    try { const d = await api('/logist/auth/setup', { method: 'POST', auth: false, body: { full_name, login, password } }); Auth.save(d.token, d.user); enterApp(); toast(T('Администратор создан', 'Адміністратора створено')); }
     catch (ex) { err(ex.message); b.disabled = false; }
   };
   $('#s-name').focus();
 }
 function enterApp() {
   document.body.classList.remove('need-auth');
-  document.title = 'Зеніт-Авто.маршрути — помощник логиста';
+  document.title = 'Зеніт-Авто.маршрути — ' + T('помощник логиста', 'помічник логіста');
   $('#auth').innerHTML = '';
   drawWho(); route();
 }
 $('#logout').onclick = async () => {
-  if (!await ask({ title: 'Выйти?', text: 'На этом компьютере нужно будет снова ввести логин и пароль.', ok: 'Выйти' })) return;
+  if (!await ask({ title: T('Выйти?', 'Вийти?'), text: T('На этом компьютере нужно будет снова ввести логин и пароль.', 'На цьому компʼютері потрібно буде знову ввести логін і пароль.'), ok: T('Выйти', 'Вийти') })) return;
   const t = Auth.token; Auth.clear();
   try { await fetch(API_BASE + '/logist/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }); } catch (_) {}
   showLogin();
@@ -429,7 +472,7 @@ function route() {
   if (r === 'users' && !Auth.isAdmin()) r = 'check';
   $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
   if (r !== 'check') Geo.pause = true;
-  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers }[r] || viewCheck)();
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp }[r] || viewCheck)();
 }
 window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 
@@ -442,10 +485,11 @@ let map = null, layerZones = null, layerRoutes = null, layerPts = null, manualFo
 
 function viewCheck() {
   $('#view').innerHTML = `
-    <div class="hd"><div><h1>Проверка маршрутных листов</h1><div class="sub">Сохраните листы из 1С в Excel <b>до своей проверки</b> и перетащите файл сюда</div></div></div>
-    <label class="drop" id="drop"><input type="file" id="file" accept=".xls,.xlsx" hidden>
-      <b>Перетащите Excel с маршрутными листами</b><span class="mu">или нажмите, чтобы выбрать файл (.xls, .xlsx)</span></label>
+    <div class="hd"><div><h1>${T('Проверка маршрутных листов', 'Перевірка маршрутних листів')}</h1><div class="sub">${T('Сохраните листы из 1С в Excel <b>до своей проверки</b> и перетащите файл сюда', 'Збережіть листи з 1С в Excel <b>до своєї перевірки</b> і перетягніть файл сюди')} · <a href="#help">${T('Инструкция', 'Інструкція')}</a></div></div></div>
+    <label class="drop${R ? ' slim' : ''}" id="drop"><input type="file" id="file" accept=".xls,.xlsx" hidden>
+      ${R ? `<b>${T('Загрузить другой файл', 'Завантажити інший файл')}</b><span class="mu">${T('или перетащите сюда', 'або перетягніть сюди')}</span>` : `<b>${T('Перетащите Excel с маршрутными листами', 'Перетягніть Excel з маршрутними листами')}</b><span class="mu">${T('или нажмите, чтобы выбрать файл (.xls, .xlsx)', 'або натисніть, щоб вибрати файл (.xls, .xlsx)')}</span>`}</label>
     <div id="res"></div>`;
+  if (!R) { try { R = JSON.parse(localStorage.getItem(LAST_KEY) || 'null'); } catch (_) {} if (R) return viewCheck(); }
   const drop = $('#drop'), inp = $('#file');
   inp.onchange = () => inp.files[0] && loadFile(inp.files[0]);
   ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
@@ -457,7 +501,7 @@ function viewCheck() {
 
 async function loadFile(f) {
   const res = $('#res');
-  res.innerHTML = '<div class="loading">Читаю файл…</div>';
+  res.innerHTML = '<div class="loading">' + T('Читаю файл…', 'Читаю файл…') + '</div>';
   let sheets;
   try {
     const buf = await f.arrayBuffer();
@@ -465,9 +509,9 @@ async function loadFile(f) {
     let aoa = [];
     for (const n of wb.SheetNames) aoa = aoa.concat(XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true }));
     sheets = parseRouteSheets(aoa);
-  } catch (e) { res.innerHTML = '<div class="err">Не удалось прочитать файл: ' + esc(e.message) + '</div>'; return; }
-  if (!sheets.length) { res.innerHTML = '<div class="err">В файле нет маршрутных листов. Нужна печатная форма «Маршрутний лист» из 1С, сохранённая в Excel.</div>'; return; }
-  res.innerHTML = `<div class="loading">Проверяю ${sheets.length} лист(ов)…</div>`;
+  } catch (e) { res.innerHTML = '<div class="err">' + T('Не удалось прочитать файл: ', 'Не вдалося прочитати файл: ') + esc(e.message) + '</div>'; return; }
+  if (!sheets.length) { res.innerHTML = '<div class="err">' + T('В файле нет маршрутных листов. Нужна печатная форма «Маршрутний лист» из 1С, сохранённая в Excel.', 'У файлі немає маршрутних листів. Потрібна друкована форма «Маршрутний лист» з 1С, збережена в Excel.') + '</div>'; return; }
+  res.innerHTML = `<div class="loading">${T('Проверяю листов: ', 'Перевіряю листів: ')}${sheets.length}…</div>`;
   try {
     const d = await api('/logist/check', { method: 'POST', body: { file: f.name, sheets } });
     Geo.stop();
@@ -476,7 +520,7 @@ async function loadFile(f) {
     saveLast();
     drawReport();
     $('#drop').classList.add('slim');
-    $('#drop').innerHTML = '<input type="file" id="file" accept=".xls,.xlsx" hidden><b>Загрузить другой файл</b><span class="mu">или перетащите сюда</span>';
+    $('#drop').innerHTML = `<input type="file" id="file" accept=".xls,.xlsx" hidden><b>${T('Загрузить другой файл', 'Завантажити інший файл')}</b><span class="mu">${T('или перетащите сюда', 'або перетягніть сюди')}</span>`;
     $('#file').onchange = e => e.target.files[0] && loadFile(e.target.files[0]);
   } catch (e) { res.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
@@ -490,17 +534,17 @@ function zonesAt(lat, lng, set) { return [...new Set(((R.zones || {})[set] || []
 function zoneStatus(s, r) {
   if (s.type !== 'city' || !r.q) return { cls: 'none' };
   const g = R.geo[r.q];
-  if (!g) return { cls: 'pend', text: 'ищу на карте…' };
+  if (!g) return { cls: 'pend', text: T('ищу на карте…', 'шукаю на карті…') };
   const key = `${s.date}|${s.no}|${r.n}|`;
-  if (g.nf) return { cls: 'nf', text: 'Адрес не найден на карте', issue: { key: key + 'addr_nf', kind: 'addr_nf', sev: 'info', title: 'Адрес не найден на карте', text: `«${r.q}» — зона не проверена. Можно поставить точку вручную` } };
+  if (g.nf) return { cls: 'nf', text: T('Адрес не найден на карте', 'Адресу не знайдено на карті'), issue: { key: key + 'addr_nf', kind: 'addr_nf', sev: 'info', title: T('Адрес не найден на карте', 'Адресу не знайдено на карті'), text: `«${r.q}» — ` + T('зона не проверена. Можно поставить точку вручную', 'зону не перевірено. Можна поставити точку вручну') } };
   const sat = isSat(s.code), set = sat ? 'subbota' : 'budni';
   const zs = zonesAt(g.lat, g.lng, set);
   const exact = g.house || g.manual;
-  if (!zs.length) return { cls: 'wa', text: 'Точка вне зон на карте', issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: 'Точка вне зон на карте', text: `${g.label || r.q}` } };
-  if (zs.includes(s.code)) return { cls: exact ? 'ok' : 'okap', text: exact ? `В своей зоне ${s.code}` : `В своей зоне ${s.code} (найдено до улицы)` };
+  if (!zs.length) return { cls: 'wa', text: T('Точка вне зон на карте', 'Точка поза зонами на карті'), issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: T('Точка вне зон на карте', 'Точка поза зонами на карті'), text: `${g.label || r.q}` } };
+  if (zs.includes(s.code)) return { cls: exact ? 'ok' : 'okap', text: T('В своей зоне ', 'У своїй зоні ') + s.code + (exact ? '' : T(' (найдено до улицы)', ' (знайдено до вулиці)')) };
   if (exact && (!sat || R.report.saturdayZonesConfirmed))
-    return { cls: 'bad', text: `Не та зона: ${zs.join(', ')}`, issue: { key: key + 'zone', kind: 'zone', sev: 'err', title: 'Не та зона', text: `Адрес в зоне ${zs.join(', ')}, а лист ${s.code}` + (g.manual ? ' (точка поставлена вручную)' : '') } };
-  return { cls: 'wa', text: `Примерно: ${zs.join(', ')}`, issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: exact ? 'Другая зона (суббота, карта не подтверждена)' : 'Зона примерно', text: `${exact ? 'Адрес' : 'Улица'} в зоне ${zs.join(', ')}, а лист ${s.code}` } };
+    return { cls: 'bad', text: T('Не та зона: ', 'Не та зона: ') + zs.join(', '), issue: { key: key + 'zone', kind: 'zone', sev: 'err', title: T('Не та зона', 'Не та зона'), text: T(`Адрес в зоне ${zs.join(', ')}, а лист ${s.code}`, `Адреса в зоні ${zs.join(', ')}, а лист ${s.code}`) + (g.manual ? T(' (точка поставлена вручную)', ' (точку поставлено вручну)') : '') } };
+  return { cls: 'wa', text: T('Примерно: ', 'Приблизно: ') + zs.join(', '), issue: { key: key + 'zone_approx', kind: 'zone_approx', sev: 'info', title: exact ? T('Другая зона (суббота, карта не подтверждена)', 'Інша зона (субота, карту не підтверджено)') : T('Зона примерно', 'Зона приблизно'), text: (exact ? T('Адрес', 'Адреса') : T('Улица', 'Вулиця')) + T(` в зоне ${zs.join(', ')}, а лист ${s.code}`, ` у зоні ${zs.join(', ')}, а лист ${s.code}`) } };
 }
 const ZCOL = { ok: '#15803d', okap: '#15803d', bad: '#b42318', wa: '#d97706', nf: '#6b7280', pend: '#9ca3af' };
 function rowIssues(s, r) { const z = zoneStatus(s, r); return z.issue ? r.iss.concat([z.issue]) : r.iss; }
@@ -526,17 +570,17 @@ function drawReport() {
   const rep = R.report, c = counts();
   const dates = [...new Set(rep.sheets.map(s => s.date))].join(', ');
   res.innerHTML = `
-    <div class="geo-line"><span>Файл: <b>${esc(R.file || rep.file)}</b> · листы за ${esc(dates)}</span><span class="mu">${R.at ? 'проверено ' + fmtDT(R.at) : ''}</span></div>
+    <div class="geo-line"><span>${T('Файл', 'Файл')}: <b>${esc(R.file || rep.file)}</b> · ${T('листы за', 'листи за')} ${esc(dates)}</span><span class="mu">${R.at ? T('проверено ', 'перевірено ') + fmtDT(R.at) : ''}</span></div>
     <div class="kpi mt" id="kpi"></div>
     <div class="work">
       <div class="sheets" id="sheets"></div>
-      <div><div class="mapbox"><div id="map"></div><div class="map-hint" id="map-hint"><span id="map-hint-t">Кликните на карте место доставки</span><button type="button" id="map-hint-x">Отмена</button></div></div>
+      <div><div class="mapbox"><div id="map"></div><div class="map-hint" id="map-hint"><span id="map-hint-t"></span><button type="button" id="map-hint-x">${T('Отмена', 'Скасувати')}</button></div></div>
         <div class="geo-line" id="geo-line"></div></div>
     </div>
     <div class="filters"><div class="tabs" id="tabs">
-      <button type="button" data-t="err">Ошибки</button><button type="button" data-t="all">Все накладные</button><button type="button" data-t="info">С пометками</button></div>
+      <button type="button" data-t="err">${T('Ошибки', 'Помилки')}</button><button type="button" data-t="all">${T('Все накладные', 'Усі накладні')}</button><button type="button" data-t="info">${T('С пометками', 'З позначками')}</button></div>
       <span class="mu small" id="tab-note"></span></div>
-    <div class="tw"><table><thead><tr><th>№</th><th>Клиент</th><th>Адрес доставки</th><th class="nw">Сумма</th><th>Замечания</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+    <div class="tw"><table><thead><tr><th>№</th><th>${T('Клиент', 'Клієнт')}</th><th>${T('Адрес доставки', 'Адреса доставки')}</th><th class="nw">${T('Сумма', 'Сума')}</th><th>${T('Замечания', 'Зауваження')}</th></tr></thead><tbody id="rows"></tbody></table></div>`;
   $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; drawRows(); };
   $('#map-hint-x').onclick = () => setManual(null);
   drawKpi(); drawSheets(); initMap(); drawRows(); drawGeoLine();
@@ -544,19 +588,19 @@ function drawReport() {
 }
 function drawKpi() {
   const c = counts(), el = $('#kpi'); if (!el) return;
-  el.innerHTML = `<div><b>${R.report.sheets.length}</b>листов</div><div><b>${c.rows}</b>накладных</div>
-    <div class="${c.err ? 'er' : 'ok'}"><b>${c.err}</b>ошибок</div><div><b>${c.note}</b>по адресу из примечания</div>
-    <div><b>${c.found}/${c.q}</b>адресов на карте</div>`;
+  el.innerHTML = `<div><b>${R.report.sheets.length}</b>${T('листов', 'листів')}</div><div><b>${c.rows}</b>${T('накладных', 'накладних')}</div>
+    <div class="${c.err ? 'er' : 'ok'}"><b>${c.err}</b>${T('ошибок', 'помилок')}</div><div><b>${c.note}</b>${T('по адресу из примечания', 'за адресою з примітки')}</div>
+    <div><b>${c.found}/${c.q}</b>${T('адресов на карте', 'адрес на карті')}</div>`;
 }
 function drawSheets() {
   const el = $('#sheets'); if (!el) return;
   const all = R.report.sheets.reduce((a, s) => a + sheetErr(s), 0);
-  el.innerHTML = `<button type="button" class="sh ${selSheet === null ? 'on' : ''}" data-no=""><span class="t"><b>Все листы</b><span>${R.report.sheets.length} листов</span></span>${all ? `<span class="pill er">${all}</span>` : '<span class="pill ok">ок</span>'}</button>` +
+  el.innerHTML = `<button type="button" class="sh ${selSheet === null ? 'on' : ''}" data-no=""><span class="t"><b>${T('Все листы', 'Усі листи')}</b><span>${R.report.sheets.length} ${T('листов', 'листів')}</span></span>${all ? `<span class="pill er">${all}</span>` : '<span class="pill ok">' + T('ок', 'ок') + '</span>'}</button>` +
     R.report.sheets.map(s => { const e = sheetErr(s); const sumBad = s.issues.some(i => i.kind === 'sum');
       const rt = Routes.of(s);
       return `<button type="button" class="sh ${selSheet === s.no ? 'on' : ''}" data-no="${esc(s.no)}"><span class="t"><b><span class="sw" style="background:${sheetColor(s)}"></span>${esc(s.code || s.route)}</b>
-      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} нак. · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || 'водитель не указан')}</span>${rt ? `<span class="km">≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}${rt.straight ? ' (по прямой)' : ''}</span>` : ''}</span>
-      ${e ? `<span class="pill er">${e}</span>` : '<span class="pill ok">ок</span>'}</button>`; }).join('');
+      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} ${T('нак.', 'нак.')} · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || T('водитель не указан', 'водія не вказано'))}</span>${rt ? `<span class="km">≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}${rt.straight ? T(' (по прямой)', ' (по прямій)') : ''}</span>` : ''}</span>
+      ${e ? `<span class="pill er">${e}</span>` : '<span class="pill ok">' + T('ок', 'ок') + '</span>'}</button>`; }).join('');
   el.onclick = e => { const b = e.target.closest('.sh'); if (!b) return; selSheet = b.dataset.no || null; drawSheets(); drawRows(); drawMap(true); };
 }
 function visibleSheets() { return R.report.sheets.filter(s => selSheet === null || s.no === selSheet); }
@@ -569,30 +613,30 @@ function drawRows() {
     const list = s.rows.map(r => ({ r, iss: rowIssues(s, r), z: zoneStatus(s, r) })).filter(x =>
       tab === 'all' || (tab === 'err' ? x.iss.some(i => i.sev === 'err') : x.iss.length > 0));
     if (!list.length && !(sheetIss.length && tab !== 'info')) continue;
-    out.push(`<tr class="day"><td colspan="5">${esc(s.code || s.route)} · лист № ${esc(s.no)} от ${esc(s.date)} · ${esc(s.driver || '')} · ${money(s.total)} грн${s.brutto ? ' · ' + money(s.brutto) + ' кг' : ''}</td></tr>`);
-    for (const i of sheetIss) out.push(`<tr class="er-row"><td></td><td colspan="3"><b>Весь лист</b></td><td class="iss">${issHtml(i)}</td></tr>`);
+    out.push(`<tr class="day"><td colspan="5">${esc(s.code || s.route)} · ${T('лист', 'лист')} № ${esc(s.no)} ${T('от', 'від')} ${esc(s.date)} · ${esc(s.driver || '')} · ${money(s.total)} грн${s.brutto ? ' · ' + money(s.brutto) + ' кг' : ''}</td></tr>`);
+    for (const i of sheetIss) out.push(`<tr class="er-row"><td></td><td colspan="3"><b>${T('Весь лист', 'Весь лист')}</b></td><td class="iss">${issHtml(i)}</td></tr>`);
     for (const { r, iss, z } of list) {
       const hasErr = iss.some(i => i.sev === 'err');
-      const addr = r.eff === 'note' ? `<span class="addr-note">из примечания</span>${esc(r.note)}<div class="mu small">в 1С: ${esc(r.addr)}</div>` : esc(r.addr) + (r.note ? `<div class="mu small">примечание: ${esc(r.note.slice(0, 140))}</div>` : '');
-      const geo = z.cls === 'none' ? '' : `<div class="geo-st ${{ ok: 'ok', okap: 'ok', bad: 'er', wa: 'wa', nf: 'mu', pend: 'mu' }[z.cls]}">● ${esc(z.text)}${z.cls === 'nf' || z.cls === 'wa' || z.cls === 'bad' || z.cls === 'okap' ? ` <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">Поставить на карте</button>` : ''}</div>`;
+      const addr = r.eff === 'note' ? `<span class="addr-note">${T('из примечания', 'з примітки')}</span>${esc(r.note)}<div class="mu small">${T('в 1С', 'в 1С')}: ${esc(r.addr)}</div>` : esc(r.addr) + (r.note ? `<div class="mu small">${T('примечание', 'примітка')}: ${esc(r.note.slice(0, 140))}</div>` : '');
+      const geo = z.cls === 'none' ? '' : `<div class="geo-st ${{ ok: 'ok', okap: 'ok', bad: 'er', wa: 'wa', nf: 'mu', pend: 'mu' }[z.cls]}">● ${esc(z.text)}${z.cls === 'nf' || z.cls === 'wa' || z.cls === 'bad' || z.cls === 'okap' ? ` <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">${T('Поставить на карте', 'Поставити на карті')}</button>` : ''}</div>`;
       out.push(`<tr class="${hasErr ? 'er-row' : ''} click" data-pt="${esc(s.no)}|${r.n}"><td class="mu">${r.n}</td>
         <td><b>${esc(r.client)}</b><div class="mu small">${esc(r.manager)}${r.inv ? ' · ' + esc(r.inv) : ''}</div></td>
         <td>${addr}${geo}</td><td class="nw">${money(r.sum)}</td>
         <td class="iss">${iss.length ? iss.map(issHtml).join('') : '<span class="mu">—</span>'}</td></tr>`);
     }
   }
-  tb.innerHTML = out.join('') || `<tr><td colspan="5" class="empty">${tab === 'err' ? 'Ошибок нет 👍' : 'Нет накладных'}</td></tr>`;
-  $('#tab-note').textContent = tab === 'err' ? 'Отметьте каждую ошибку: «Верно» или «Ложная тревога» — по этим отметкам считаем итоги пилота' : '';
+  tb.innerHTML = out.join('') || `<tr><td colspan="5" class="empty">${tab === 'err' ? T('Ошибок нет 👍', 'Помилок немає 👍') : T('Нет накладных', 'Немає накладних')}</td></tr>`;
+  $('#tab-note').textContent = tab === 'err' ? T('Отметьте каждую ошибку: «Верно» или «Ложная тревога» — по этим отметкам считаем итоги пилота', 'Позначте кожну помилку: «Вірно» або «Хибна тривога» — за цими позначками рахуємо підсумки пілоту') : '';
   tb.onclick = onRowsClick;
   tb.onchange = onRowsChange;
 }
 function issHtml(i) {
   const m = R.marks[i.key] || {};
   const verd = i.sev === 'err' ? `<div class="verd" data-key="${esc(i.key)}">
-      <button class="btn sm ${m.verdict === 'ok' ? 'on-ok' : ''}" type="button" data-v="ok">Верно</button>
-      <button class="btn sm ${m.verdict === 'false' ? 'on-false' : ''}" type="button" data-v="false">Ложная тревога</button>
-      <input class="in" type="text" placeholder="комментарий" value="${esc(m.comment || '')}" data-c="1"></div>` : '';
-  return `<div class="isx ${i.sev === 'err' ? 'er' : 'inf'}"><div class="ttl">${esc(i.title)}</div><div class="txt">${esc(i.text)}</div>${verd}</div>`;
+      <button class="btn sm ${m.verdict === 'ok' ? 'on-ok' : ''}" type="button" data-v="ok">${T('Верно', 'Вірно')}</button>
+      <button class="btn sm ${m.verdict === 'false' ? 'on-false' : ''}" type="button" data-v="false">${T('Ложная тревога', 'Хибна тривога')}</button>
+      <input class="in" type="text" placeholder="${T('комментарий', 'коментар')}" value="${esc(m.comment || '')}" data-c="1"></div>` : '';
+  return `<div class="isx ${i.sev === 'err' ? 'er' : 'inf'}"><div class="ttl">${esc(TI(i, 'title'))}</div><div class="txt">${esc(TI(i, 'text'))}</div>${verd}</div>`;
 }
 async function saveMark(key, verdict, comment) {
   const prev = R.marks[key];
@@ -619,7 +663,7 @@ function onRowsChange(e) {
   const c = e.target.closest('[data-c]'); if (!c) return;
   const box = c.closest('.verd'), key = box.dataset.key, m = R.marks[key] || {};
   saveMark(key, m.verdict || null, c.value.trim());
-  toast('Комментарий сохранён');
+  toast(T('Комментарий сохранён', 'Коментар збережено'));
 }
 
 // ── карта ──
@@ -659,7 +703,7 @@ function drawMap(fit) {
   for (const [k, w] of Object.entries(R.warehouses || {})) {
     const c = whCoords(k); if (!c) continue;
     L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }), opacity: usedWh.has(k) ? 1 : .45 })
-      .addTo(layerPts).bindPopup(`<b>${esc(w.name)}</b><br>${esc(w.address || '')}${!w.coords ? '<br><span style="color:#6b7280">найден по адресу — проверьте точку; точные координаты можно вписать в справочник</span>' : ''}`);
+      .addTo(layerPts).bindPopup(`<b>${esc(w.name)}</b><br>${esc(w.address || '')}${!w.coords ? '<br><span style="color:#6b7280">' + T('найден по адресу — проверьте точку; точные координаты можно вписать в справочник', 'знайдено за адресою — перевірте точку; точні координати можна вписати в довідник') + '</span>' : ''}`);
   }
   if (!R.warehouses && R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(layerPts).bindPopup('<b>Склад</b>');
   for (const s of vs) {
@@ -673,7 +717,7 @@ function drawMap(fit) {
       const html = stop > 0 ? `<div class="mk num" style="background:${col}">${stop}</div>` : `<div class="mk" style="background:${col}"></div>`;
       const sz = stop > 0 ? 22 : 16;
       const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }) }).addTo(layerPts);
-      m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}${stop ? ' · остановка ' + stop : ''}<br>${esc(r.q.replace(/^нп:/, '').split('|')[0])}<br><span style="color:#6b7280">${esc(g.manual ? 'точка поставлена вручную' : 'найдено: ' + (g.label || ''))}</span>${z.text ? `<br><i>${esc(z.text)}</i>` : ''}`);
+      m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}${stop ? T(' · остановка ', ' · зупинка ') + stop : ''}<br>${esc(r.q.replace(/^нп:/, '').split('|')[0])}<br><span style="color:#6b7280">${esc(g.manual ? T('точка поставлена вручную', 'точку поставлено вручну') : T('найдено: ', 'знайдено: ') + (g.label || ''))}</span>${z.text ? `<br><i>${esc(z.text)}</i>` : ''}`);
       m._pt = s.no + '|' + r.n; bounds.push([g.lat, g.lng]);
     }
   }
@@ -688,15 +732,15 @@ function findRow(pt) { const [no, n] = pt.split('|'); const s = R.report.sheets.
 function setManual(pt) {
   manualFor = pt;
   $('#map-hint').classList.toggle('on', !!pt);
-  if (pt) { const { r } = findRow(pt); $('#map-hint-t').textContent = 'Кликните на карте: ' + (r ? r.client.slice(0, 40) : ''); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  if (pt) { const { r } = findRow(pt); $('#map-hint-t').textContent = T('Кликните на карте: ', 'Клацніть на карті: ') + (r ? r.client.slice(0, 40) : ''); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 async function placeManual(ll) {
   const { s, r } = findRow(manualFor); setManual(null);
   if (!r || !r.q) return;
-  R.geo[r.q] = { lat: ll.lat, lng: ll.lng, house: true, manual: true, label: 'поставлено вручную', src: 'логист', nf: false };
+  R.geo[r.q] = { lat: ll.lat, lng: ll.lng, house: true, manual: true, label: T('поставлено вручную', 'поставлено вручну'), src: 'логист', nf: false };
   saveLast(); refreshAll();
   await Geo.send([r.q]);
-  toast('Точка сохранена — для этого адреса больше не ищем');
+  toast(T('Точка сохранена — для этого адреса больше не ищем', 'Точку збережено — для цієї адреси більше не шукаємо'));
   if (!Geo.running) Routes.build(Geo.run);
 }
 function refreshAll() {
@@ -707,9 +751,9 @@ function refreshAll() {
 function drawGeoLine() {
   const el = $('#geo-line'); if (!el) return;
   const c = counts();
-  el.innerHTML = c.q ? (Geo.running ? `<span class="prog wide"><i style="width:${Math.round(c.found / c.q * 100)}%"></i></span><span>Ищу адреса на карте: ${c.found} из ${c.q}</span>`
-    : `<span>Адреса на карте: ${c.found} из ${c.q}${c.found < c.q ? ' · ' : ''}</span>${c.found < c.q ? '<button class="btn sm" type="button" id="geo-go">Продолжить поиск</button>' : ''}`) : '<span>Адресов для карты нет</span>';
-  if (!Geo.running && Routes.busy) el.innerHTML += `<span>· строю маршруты…</span>`;
+  el.innerHTML = c.q ? (Geo.running ? `<span class="prog wide"><i style="width:${Math.round(c.found / c.q * 100)}%"></i></span><span>${T('Ищу адреса на карте', 'Шукаю адреси на карті')}: ${c.found} ${T('из', 'з')} ${c.q}</span>`
+    : `<span>${T('Адреса на карте', 'Адреси на карті')}: ${c.found} ${T('из', 'з')} ${c.q}${c.found < c.q ? ' · ' : ''}</span>${c.found < c.q ? `<button class="btn sm" type="button" id="geo-go">${T('Продолжить поиск', 'Продовжити пошук')}</button>` : ''}`) : `<span>${T('Адресов для карты нет', 'Адрес для карти немає')}</span>`;
+  if (!Geo.running && Routes.busy) el.innerHTML += `<span>· ${T('строю маршруты…', 'будую маршрути…')}</span>`;
   const b = $('#geo-go'); if (b) b.onclick = () => Geo.start();
 }
 
@@ -766,12 +810,12 @@ async function geocode(q) {
     try { cand = cand.concat(await nominatim(q)); } catch (_) {}
     best = cand.find(c => c.house && same(q, c.street)) || cand.find(c => same(q, c.street));
   }
-  return best ? { lat: best.lat, lng: best.lng, house: best.house, label: best.label, src: best.src, nf: false } : { nf: true, label: cand[0] ? 'сервис предложил: ' + cand[0].label : '' };
+  return best ? { lat: best.lat, lng: best.lng, house: best.house, label: best.label, src: best.src, nf: false } : { nf: true, label: cand[0] ? T('сервис предложил: ', 'сервіс запропонував: ') + cand[0].label : '' };
 }
 // ── маршруты на карте: примерный объезд от склада и обратно (публичный сервис OSRM, без него — по прямой) ──
 const RPAL = ['#2563eb', '#db2777', '#0d9488', '#ea580c', '#7c3aed', '#65a30d', '#0284c7', '#ca8a04', '#c026d3', '#059669', '#dc2626', '#4f46e5', '#0891b2', '#9333ea'];
 const sheetColor = s => RPAL[R.report.sheets.indexOf(s) % RPAL.length];
-const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`; };
+const fmtMin = m => { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} ${T('ч', 'год')} ${m % 60} ${T('мин', 'хв')}` : `${m} ${T('мин', 'хв')}`; };
 function hav(a, b) { const t = x => x * Math.PI / 180, dl = t(b[0] - a[0]), dn = t(b[1] - a[1]); const h = Math.sin(dl / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dn / 2) ** 2; return 12742 * Math.asin(Math.sqrt(h)); }
 // откуда выезжает лист: склад из справочника; без координат — найденный по адресу; иначе склад с карты зон
 function whCoords(k) {
@@ -787,7 +831,7 @@ async function findWarehouses() {
     try { const c = (await photon(w.address)).find(x => x.house) || null; if (c) g = { lat: c.lat, lng: c.lng, house: true, label: c.label, src: c.src, nf: false }; } catch (_) {}
     if (g.nf) { await sleep(1100); try { const c = (await nominatim(w.address))[0]; if (c) g = { lat: c.lat, lng: c.lng, house: c.house, label: c.label, src: c.src, nf: false }; } catch (_) {} }
     R.geo['склад:' + k] = g;
-    if (g.nf) toast(`Не нашёл на карте: ${w.name}. Впишите координаты склада в справочник`);
+    if (g.nf) toast(T(`Не нашёл на карте: ${w.name}. Впишите координаты склада в справочник`, `Не знайшов на карті: ${w.name}. Впишіть координати складу в довідник`));
     await sleep(1100);
   }
 }
@@ -876,43 +920,44 @@ const Geo = {
       if (z.issue) zone.push({ date: s.date, no: s.no, n: r.n, ...z.issue });
     }
     if (!items.length && !rows.length) return;
-    try { await api('/logist/geo', { method: 'POST', body: { items, rows, zone } }); } catch (e) { if (e.status !== 401) toast('Не удалось сохранить точки: ' + e.message); }
+    try { await api('/logist/geo', { method: 'POST', body: { items, rows, zone } }); } catch (e) { if (e.status !== 401) toast(T('Не удалось сохранить точки: ', 'Не вдалося зберегти точки: ') + e.message); }
   }
 };
 
 // ═══ Исправить адрес в 1С ═════════════════════════════════
 let fixDays = 7, fixItems = [];
 async function viewFix() {
-  $('#view').innerHTML = `<div class="hd"><div><h1>Исправить основной адрес в 1С</h1><div class="sub">Клиенты, у которых основной адрес неполный или не по маршруту, а правильный менеджер вписывает в примечание</div></div>
-    <div class="bar"><select class="in" id="fix-days"><option value="7">за 7 дней</option><option value="14">за 14 дней</option><option value="30">за 30 дней</option></select>
-    <button class="btn" type="button" id="fix-xls">Скачать Excel</button></div></div><div id="fix-res"><div class="loading">Загружаю…</div></div>`;
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Исправить основной адрес в 1С', 'Виправити основну адресу в 1С')}</h1><div class="sub">${T('Клиенты, у которых основной адрес неполный или не по маршруту, а правильный менеджер вписывает в примечание', 'Клієнти, у яких основна адреса неповна або не за маршрутом, а правильну менеджер вписує в примітку')}</div></div>
+    <div class="bar"><select class="in" id="fix-days"><option value="7">${T('за 7 дней', 'за 7 днів')}</option><option value="14">${T('за 14 дней', 'за 14 днів')}</option><option value="30">${T('за 30 дней', 'за 30 днів')}</option></select>
+    <button class="btn" type="button" id="fix-xls">${T('Скачать Excel', 'Завантажити Excel')}</button></div></div><div id="fix-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
   $('#fix-days').value = String(fixDays);
   $('#fix-days').onchange = e => { fixDays = +e.target.value; viewFix(); };
   $('#fix-xls').onclick = () => {
-    if (!fixItems.length) return toast('Список пуст');
-    const ws = XLSX.utils.json_to_sheet(fixItems.map(x => ({ 'Менеджер': x.manager, 'Клиент': x.client, 'Адрес в 1С': x.addr, 'Адрес из примечания': x.note, 'Что не так': x.why, 'Раз за период': x.times, 'Последний лист': x.last_date, 'Маршруты': x.routes })));
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Исправить адрес');
-    XLSX.writeFile(wb, `Исправить_адрес_в_1С_${todayStr()}.xlsx`);
+    if (!fixItems.length) return toast(T('Список пуст', 'Список порожній'));
+    const ws = XLSX.utils.json_to_sheet(fixItems.map(x => ({ [T('Менеджер', 'Менеджер')]: x.manager, [T('Клиент', 'Клієнт')]: x.client, [T('Адрес в 1С', 'Адреса в 1С')]: x.addr,
+      [T('Адрес из примечания', 'Адреса з примітки')]: x.note, [T('Что не так', 'Що не так')]: TI(x, 'why'), [T('Раз за период', 'Разів за період')]: x.times, [T('Последний лист', 'Останній лист')]: x.last_date, [T('Маршруты', 'Маршрути')]: x.routes })));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, T('Исправить адрес', 'Виправити адресу'));
+    XLSX.writeFile(wb, T('Исправить_адрес_в_1С_', 'Виправити_адресу_в_1С_') + todayStr() + '.xlsx');
   };
   try {
     const d = await api('/logist/fix?days=' + fixDays);
     fixItems = d.items || [];
-    $('#fix-res').innerHTML = fixItems.length ? `<div class="tw"><table><thead><tr><th>Менеджер</th><th>Клиент</th><th>Адрес в 1С</th><th>Адрес из примечания</th><th>Раз</th><th>Последний</th><th>Маршрут</th></tr></thead><tbody>
-      ${fixItems.map(x => `<tr><td>${esc(x.manager)}</td><td><b>${esc(x.client)}</b></td><td>${esc(x.addr)}<div class="mu small">${esc(x.why)}</div></td><td>${esc(x.note)}</td><td>${x.times}</td><td class="nw">${esc(x.last_date)}</td><td>${esc(x.routes)}</td></tr>`).join('')}
-      </tbody></table></div>` : '<div class="empty card">За этот период таких клиентов нет</div>';
+    $('#fix-res').innerHTML = fixItems.length ? `<div class="tw"><table><thead><tr><th>${T('Менеджер', 'Менеджер')}</th><th>${T('Клиент', 'Клієнт')}</th><th>${T('Адрес в 1С', 'Адреса в 1С')}</th><th>${T('Адрес из примечания', 'Адреса з примітки')}</th><th>${T('Раз', 'Разів')}</th><th>${T('Последний', 'Останній')}</th><th>${T('Маршрут', 'Маршрут')}</th></tr></thead><tbody>
+      ${fixItems.map(x => `<tr><td>${esc(x.manager)}</td><td><b>${esc(x.client)}</b></td><td>${esc(x.addr)}<div class="mu small">${esc(TI(x, 'why'))}</div></td><td>${esc(x.note)}</td><td>${x.times}</td><td class="nw">${esc(x.last_date)}</td><td>${esc(x.routes)}</td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty card">${T('За этот период таких клиентов нет', 'За цей період таких клієнтів немає')}</div>`;
   } catch (e) { $('#fix-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 
 // ═══ Итоги пилота ═════════════════════════════════════════
 async function viewStats(body) {
-  if (!body) $('#view').innerHTML = `<div class="hd"><div><h1>Итоги пилота</h1><div class="sub">Ошибки по дням, отметки логиста и время на проверку</div></div></div>
-    <div class="panel"><h2>Время на проверку листов</h2>
-      <form class="timef" id="time-f"><label>День<input class="in" type="date" id="t-day"></label>
-      <label>Минут<input class="in" type="number" min="0" max="1440" id="t-min" style="width:110px"></label>
-      <label class="ck"><input type="checkbox" id="t-help" checked> с помощником</label>
-      <button class="btn pri" type="submit">Сохранить</button></form>
-      <div class="mu small" style="margin-top:8px">Записывайте каждый день, сколько минут ушло на проверку листов. Дни без помощника (до пилота) — без галочки.</div></div>
-    <div id="st-res"><div class="loading">Загружаю…</div></div>`;
+  if (!body) $('#view').innerHTML = `<div class="hd"><div><h1>${T('Итоги пилота', 'Підсумки пілоту')}</h1><div class="sub">${T('Ошибки по дням, отметки логиста и время на проверку', 'Помилки по днях, позначки логіста й час на перевірку')}</div></div></div>
+    <div class="panel"><h2>${T('Время на проверку листов', 'Час на перевірку листів')}</h2>
+      <form class="timef" id="time-f"><label>${T('День', 'День')}<input class="in" type="date" id="t-day"></label>
+      <label>${T('Минут', 'Хвилин')}<input class="in" type="number" min="0" max="1440" id="t-min" style="width:110px"></label>
+      <label class="ck"><input type="checkbox" id="t-help" checked> ${T('с помощником', 'з помічником')}</label>
+      <button class="btn pri" type="submit">${T('Сохранить', 'Зберегти')}</button></form>
+      <div class="mu small" style="margin-top:8px">${T('Записывайте каждый день, сколько минут ушло на проверку листов. Дни без помощника (до пилота) — без галочки.', 'Записуйте щодня, скільки хвилин пішло на перевірку листів. Дні без помічника (до пілоту) — без галочки.')}</div></div>
+    <div id="st-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
   const dd = new Date(); $('#t-day').value = dd.toISOString().slice(0, 10);
   $('#time-f').onsubmit = e => {
     e.preventDefault();
@@ -922,57 +967,131 @@ async function viewStats(body) {
   };
   try {
     const d = await api('/logist/stats', { method: 'POST', body: body || { days: 60 } });
-    if (body && body.time) toast('Время сохранено');
+    if (body && body.time) toast(T('Время сохранено', 'Час збережено'));
     const days = d.days || [];
     const tot = days.reduce((a, x) => { a.sheets += num(x.sheets); a.rows += num(x.rows); a.errors += num(x.errors); a.ok += num(x.ok); a.f += num(x.false); return a; }, { sheets: 0, rows: 0, errors: 0, ok: 0, f: 0 });
     const marked = tot.ok + tot.f, falsePct = marked ? Math.round(tot.f / marked * 100) : null;
     const avg = flag => { const xs = days.filter(x => x.minutes !== null && x.minutes !== undefined && !!x.with_helper === flag); return xs.length ? Math.round(xs.reduce((a, x) => a + num(x.minutes), 0) / xs.length) : null; };
-    const KIND = { route_np: 'не тот НП', addr_bad: 'неполный адрес', sum: 'мало суммы', stop: 'не отгружать', zone: 'не та зона' };
-    $('#st-res').innerHTML = `<div class="kpi"><div><b>${tot.sheets}</b>листов проверено</div><div class="${tot.errors ? 'er' : ''}"><b>${tot.errors}</b>ошибок найдено</div>
-      <div class="ok"><b>${tot.ok}</b>подтверждено</div><div class="${falsePct !== null && falsePct >= 30 ? 'er' : ''}"><b>${falsePct === null ? '—' : falsePct + '%'}</b>ложных тревог (цель &lt; 30%)</div>
-      <div><b>${avg(false) ?? '—'} → ${avg(true) ?? '—'}</b>мин в день: без помощника → с ним</div></div>
-      <div class="tw"><table><thead><tr><th>День</th><th>Листов</th><th>Накладных</th><th>Ошибок</th><th>По видам</th><th>Верно</th><th>Ложных</th><th>Не отмечено</th><th>Минут</th>${Auth.isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
+    const KIND = { route_np: T('не тот НП', 'не той НП'), addr_bad: T('неполный адрес', 'неповна адреса'), sum: T('мало суммы', 'замала сума'), stop: T('не отгружать', 'не відвантажувати'), zone: T('не та зона', 'не та зона') };
+    $('#st-res').innerHTML = `<div class="kpi"><div><b>${tot.sheets}</b>${T('листов проверено', 'листів перевірено')}</div><div class="${tot.errors ? 'er' : ''}"><b>${tot.errors}</b>${T('ошибок найдено', 'помилок знайдено')}</div>
+      <div class="ok"><b>${tot.ok}</b>${T('подтверждено', 'підтверджено')}</div><div class="${falsePct !== null && falsePct >= 30 ? 'er' : ''}"><b>${falsePct === null ? '—' : falsePct + '%'}</b>${T('ложных тревог (цель &lt; 30%)', 'хибних тривог (мета &lt; 30%)')}</div>
+      <div><b>${avg(false) ?? '—'} → ${avg(true) ?? '—'}</b>${T('мин в день: без помощника → с ним', 'хв на день: без помічника → з ним')}</div></div>
+      <div class="tw"><table><thead><tr><th>${T('День', 'День')}</th><th>${T('Листов', 'Листів')}</th><th>${T('Накладных', 'Накладних')}</th><th>${T('Ошибок', 'Помилок')}</th><th>${T('По видам', 'За видами')}</th><th>${T('Верно', 'Вірно')}</th><th>${T('Ложных', 'Хибних')}</th><th>${T('Не отмечено', 'Не позначено')}</th><th>${T('Минут', 'Хвилин')}</th>${Auth.isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
       ${days.map(x => `<tr><td class="nw">${esc(x.day.split('-').reverse().join('.'))}</td><td>${x.sheets}</td><td>${x.rows}</td><td>${x.errors}</td>
         <td class="small">${Object.entries(x.by_kind || {}).map(([k, v]) => esc(KIND[k] || k) + ': ' + v).join(', ') || '—'}</td>
         <td>${x.ok}</td><td>${x.false}</td><td>${Math.max(0, num(x.errors) - num(x.ok) - num(x.false))}</td>
-        <td>${x.minutes ?? '—'}${x.minutes !== null && x.minutes !== undefined ? (x.with_helper ? '' : ' <span class="pill">без помощника</span>') : ''}</td>
-        ${Auth.isAdmin() ? `<td><button class="btn sm" type="button" data-del="${esc(x.day)}">Удалить</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="10" class="empty">Пока нет данных</td></tr>`}
+        <td>${x.minutes ?? '—'}${x.minutes !== null && x.minutes !== undefined ? (x.with_helper ? '' : ' <span class="pill">' + T('без помощника', 'без помічника') + '</span>') : ''}</td>
+        ${Auth.isAdmin() ? `<td><button class="btn sm" type="button" data-del="${esc(x.day)}">${T('Удалить', 'Видалити')}</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="10" class="empty">${T('Пока нет данных', 'Поки немає даних')}</td></tr>`}
       </tbody></table></div>`;
     $('#st-res').onclick = async e => {
       const b = e.target.closest('[data-del]'); if (!b) return;
       const x = days.find(d => d.day === b.dataset.del), dd = x.day.split('-').reverse().join('.');
-      const a = await ask({ title: `Удалить данные за ${dd}?`, danger: true, ok: 'Удалить',
-        text: `Удалятся листы (${x.sheets}), накладные (${x.rows}), найденные ошибки и отметки логиста за этот день. Вернуть нельзя.<br><span class="mu small">Точки адресов на карте останутся — они пригодятся в другие дни.</span>`,
-        check: x.minutes !== null && x.minutes !== undefined ? 'Удалить и записанное время на проверку' : '' });
+      const a = await ask({ title: T(`Удалить данные за ${dd}?`, `Видалити дані за ${dd}?`), danger: true, ok: T('Удалить', 'Видалити'),
+        text: T(`Удалятся листы (${x.sheets}), накладные (${x.rows}), найденные ошибки и отметки логиста за этот день. Вернуть нельзя.<br><span class="mu small">Точки адресов на карте останутся — они пригодятся в другие дни.</span>`,
+                `Буде видалено листи (${x.sheets}), накладні (${x.rows}), знайдені помилки й позначки логіста за цей день. Повернути не можна.<br><span class="mu small">Точки адрес на карті залишаться — вони знадобляться в інші дні.</span>`),
+        check: x.minutes !== null && x.minutes !== undefined ? T('Удалить и записанное время на проверку', 'Видалити й записаний час на перевірку') : '' });
       if (!a) return;
       try {
         const r = await api('/logist/admin/delete-day', { method: 'POST', body: { day: dd, with_time: x.minutes !== null && x.minutes !== undefined ? a.checked : false } });
         if (R && R.report.sheets.some(s => s.date === dd)) { R = null; try { localStorage.removeItem(LAST_KEY); } catch (_) {} }
-        toast(`Удалено: листов ${r.deleted.sheets}, накладных ${r.deleted.rows}`);
+        toast(T(`Удалено: листов ${r.deleted.sheets}, накладных ${r.deleted.rows}`, `Видалено: листів ${r.deleted.sheets}, накладних ${r.deleted.rows}`));
         viewStats({ days: 60 });
       } catch (ex) { toast(ex.message); }
     };
   } catch (e) { $('#st-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 
+// ═══ Инструкция ═══════════════════════════════════════════
+function viewHelp() {
+  const ru = `
+  <div class="hd"><div><h1>Инструкция</h1><div class="sub">Помощник проверяет маршрутные листы до проведения: находит ошибки менеджеров и показывает листы на карте. В 1С он ничего не меняет — исправляете вы, как обычно.</div></div></div>
+  <div class="panel help">
+    <h2>Каждый день</h2>
+    <ol>
+      <li><b>До своей проверки</b> сохраните маршрутные листы из 1С в Excel (печатная форма «Маршрутний лист»). Все листы дня можно одним файлом.</li>
+      <li>Откройте «Проверка листов» и перетащите файл в рамку (или нажмите на неё и выберите файл).</li>
+      <li>Смотрите вкладку <b>«Ошибки»</b>. По каждой ошибке нажмите <b>«Верно»</b> или <b>«Ложная тревога»</b>, при желании напишите комментарий. Исправляйте в 1С как обычно.</li>
+      <li>Вечером в «Итогах пилота» запишите, сколько минут ушло на проверку листов.</li>
+    </ol>
+    <h2>Раз в неделю</h2>
+    <ul><li>«Исправить адрес в 1С» → «Скачать Excel» и передайте менеджерам: у этих клиентов основной адрес в карточке неполный или не тот, а правильный каждый раз пишут в примечании.</li></ul>
+    <h2>Что проверяет помощник</h2>
+    <ul>
+      <li><b>Адрес из примечания главный.</b> Если менеджер вписал адрес в примечание, проверяем по нему — это не ошибка.</li>
+      <li><b>Не тот населённый пункт</b> — межгород: адрес не входит в список населённых пунктов маршрута.</li>
+      <li><b>Не та зона</b> — город: адрес на карте лежит в зоне другого маршрута (по вашей карте зон).</li>
+      <li><b>Адрес неполный</b> — нет улицы или дома, и в примечании адреса тоже нет.</li>
+      <li><b>Мало суммы на рейс</b> — городской лист меньше 1000 грн.</li>
+      <li><b>Клиент «не отгружать»</b> — такая пометка в названии клиента.</li>
+      <li>Серым — для информации: адрес из примечания, перенесён с другого дня, адрес не найден на карте.</li>
+    </ul>
+    <h2>Карта</h2>
+    <ul>
+      <li>Адреса ищутся сами, прямо у вас на глазах — до 1 адреса в секунду. Найденные запоминаются, в следующие дни появляются сразу.</li>
+      <li><span class="dot" style="background:#15803d"></span>в своей зоне · <span class="dot" style="background:#b42318"></span>не та зона · <span class="dot" style="background:#d97706"></span>примерно или вне зон · <span class="dot" style="background:#6b7280"></span>не найден</li>
+      <li>Если адрес не найден или стоит не там — нажмите <b>«Поставить на карте»</b> и кликните нужное место. Помощник запомнит точку.</li>
+      <li>Линия — <b>примерный</b> объезд от склада и обратно, с номерами остановок при выборе листа. Это подсказка, а не задание водителю.</li>
+      <li>Нажмите на строку накладной — карта покажет её точку.</li>
+    </ul>
+    <h2>Если что-то не так</h2>
+    <ul><li>Ошибка неверная — отметьте «Ложная тревога» и напишите в комментарии почему: по этим отметкам правим правила.</li>
+    <li>Страница не открывается или не проверяет файл — напишите менеджеру проекта.</li></ul>
+  </div>`;
+  const uk = `
+  <div class="hd"><div><h1>Інструкція</h1><div class="sub">Помічник перевіряє маршрутні листи до проведення: знаходить помилки менеджерів і показує листи на карті. В 1С він нічого не змінює — виправляєте ви, як звичайно.</div></div></div>
+  <div class="panel help">
+    <h2>Щодня</h2>
+    <ol>
+      <li><b>До своєї перевірки</b> збережіть маршрутні листи з 1С в Excel (друкована форма «Маршрутний лист»). Усі листи дня можна одним файлом.</li>
+      <li>Відкрийте «Перевірка листів» і перетягніть файл у рамку (або натисніть на неї й виберіть файл).</li>
+      <li>Дивіться вкладку <b>«Помилки»</b>. Для кожної помилки натисніть <b>«Вірно»</b> або <b>«Хибна тривога»</b>, за бажання напишіть коментар. Виправляйте в 1С як звичайно.</li>
+      <li>Увечері в «Підсумках пілоту» запишіть, скільки хвилин пішло на перевірку листів.</li>
+    </ol>
+    <h2>Раз на тиждень</h2>
+    <ul><li>«Виправити адресу в 1С» → «Завантажити Excel» і передайте менеджерам: у цих клієнтів основна адреса в картці неповна або не та, а правильну щоразу пишуть у примітці.</li></ul>
+    <h2>Що перевіряє помічник</h2>
+    <ul>
+      <li><b>Адреса з примітки головна.</b> Якщо менеджер вписав адресу в примітку, перевіряємо за нею — це не помилка.</li>
+      <li><b>Не той населений пункт</b> — міжмісто: адреса не входить до списку населених пунктів маршруту.</li>
+      <li><b>Не та зона</b> — місто: адреса на карті лежить у зоні іншого маршруту (за вашою картою зон).</li>
+      <li><b>Адреса неповна</b> — немає вулиці або будинку, і в примітці адреси теж немає.</li>
+      <li><b>Замала сума на рейс</b> — міський лист менше 1000 грн.</li>
+      <li><b>Клієнт «не відвантажувати»</b> — така позначка в назві клієнта.</li>
+      <li>Сірим — для інформації: адреса з примітки, перенесено з іншого дня, адресу не знайдено на карті.</li>
+    </ul>
+    <h2>Карта</h2>
+    <ul>
+      <li>Адреси шукаються самі, просто у вас на очах — до 1 адреси на секунду. Знайдені запамʼятовуються, наступними днями зʼявляються одразу.</li>
+      <li><span class="dot" style="background:#15803d"></span>у своїй зоні · <span class="dot" style="background:#b42318"></span>не та зона · <span class="dot" style="background:#d97706"></span>приблизно або поза зонами · <span class="dot" style="background:#6b7280"></span>не знайдено</li>
+      <li>Якщо адресу не знайдено або вона стоїть не там — натисніть <b>«Поставити на карті»</b> і клацніть потрібне місце. Помічник запамʼятає точку.</li>
+      <li>Лінія — <b>приблизний</b> обʼїзд від складу й назад, з номерами зупинок, коли вибрано лист. Це підказка, а не завдання водієві.</li>
+      <li>Натисніть на рядок накладної — карта покаже її точку.</li>
+    </ul>
+    <h2>Якщо щось не так</h2>
+    <ul><li>Помилка невірна — позначте «Хибна тривога» й напишіть у коментарі чому: за цими позначками правимо правила.</li>
+    <li>Сторінка не відкривається або не перевіряє файл — напишіть менеджеру проєкту.</li></ul>
+  </div>`;
+  $('#view').innerHTML = T(ru, uk);
+}
+
 // ═══ Пользователи (только администратор) ═════════════════
 function genPassword() { const abc = 'abcdefghjkmnpqrstuvwxyz23456789'; const a = new Uint32Array(8); crypto.getRandomValues(a); return Array.from(a, x => abc[x % abc.length]).join(''); }
 async function viewUsers(d) {
   if (!d) {
-    $('#view').innerHTML = `<div class="hd"><div><h1>Пользователи</h1><div class="sub">Логисты и администраторы помощника. Отдельно от «Зеніт-Авто.фото»</div></div></div>
-      <div class="panel"><h2>Добавить</h2><form class="form" id="u-f">
-        <label>Имя и фамилия<input class="in" id="u-name" required></label>
-        <label>Логин<input class="in" id="u-login" autocapitalize="none" spellcheck="false" placeholder="латиница" required></label>
-        <label>Пароль<span class="pass"><input class="in" id="u-pass" required><button class="btn sm" type="button" id="u-gen">Придумать</button></span></label>
-        <label>Роль<select class="in" id="u-role"><option value="logist">логист</option><option value="admin">администратор</option></select></label>
-      </form><button class="btn pri" type="button" id="u-add">Добавить</button><div id="u-creds" class="mt"></div></div>
-      <div id="u-res"><div class="loading">Загружаю…</div></div>`;
+    $('#view').innerHTML = `<div class="hd"><div><h1>${T('Пользователи', 'Користувачі')}</h1><div class="sub">${T('Логисты и администраторы помощника. Отдельно от «Зеніт-Авто.фото»', 'Логісти й адміністратори помічника. Окремо від «Зеніт-Авто.фото»')}</div></div></div>
+      <div class="panel"><h2>${T('Добавить', 'Додати')}</h2><form class="form" id="u-f">
+        <label>${T('Имя и фамилия', 'Імʼя та прізвище')}<input class="in" id="u-name" required></label>
+        <label>${T('Логин', 'Логін')}<input class="in" id="u-login" autocapitalize="none" spellcheck="false" placeholder="${T('латиница', 'латиниця')}" required></label>
+        <label>Пароль<span class="pass"><input class="in" id="u-pass" required><button class="btn sm" type="button" id="u-gen">${T('Придумать', 'Згенерувати')}</button></span></label>
+        <label>${T('Роль', 'Роль')}<select class="in" id="u-role"><option value="logist">${roleName('logist')}</option><option value="admin">${roleName('admin')}</option></select></label>
+      </form><button class="btn pri" type="button" id="u-add">${T('Добавить', 'Додати')}</button><div id="u-creds" class="mt"></div></div>
+      <div id="u-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
     $('#u-pass').value = genPassword();
     $('#u-gen').onclick = () => { $('#u-pass').value = genPassword(); };
     $('#u-add').onclick = async () => {
       const body = { action: 'create', full_name: $('#u-name').value.trim(), login: $('#u-login').value.trim().toLowerCase(), password: $('#u-pass').value, role: $('#u-role').value };
       try { const r = await api('/logist/admin/user-action', { method: 'POST', body });
-        $('#u-creds').innerHTML = `<div class="creds">Готово. Передайте: ссылка <code>${esc(location.href.split('#')[0])}</code> · логин <code>${esc(body.login)}</code> · пароль <code>${esc(body.password)}</code></div>`;
+        $('#u-creds').innerHTML = `<div class="creds">${T('Готово. Передайте: ссылка', 'Готово. Передайте: посилання')} <code>${esc(location.href.split('#')[0])}</code> · ${T('логин', 'логін')} <code>${esc(body.login)}</code> · пароль <code>${esc(body.password)}</code></div>`;
         $('#u-name').value = ''; $('#u-login').value = ''; $('#u-pass').value = genPassword(); drawUsers(r.users);
       } catch (e) { $('#u-creds').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
     };
@@ -980,28 +1099,28 @@ async function viewUsers(d) {
   try { const r = await api('/logist/admin/users'); drawUsers(r.users); } catch (e) { $('#u-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 function drawUsers(list) {
-  $('#u-res').innerHTML = `<div class="tw"><table><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Был</th><th>Статус</th><th></th></tr></thead><tbody>
-    ${list.map(u => `<tr><td><b>${esc(u.full_name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(ROLE_RU[u.role] || u.role)}</td><td>${fmtDT(u.last_seen_at)}</td>
-      <td>${u.is_active ? '<span class="pill ok">активен</span>' : '<span class="pill er">заблокирован</span>'}</td>
-      <td><span class="uacts"><button class="btn sm" type="button" data-ua="password" data-id="${u.id}">Новый пароль</button>
-      ${Auth.user && u.id === Auth.user.id ? '' : `<button class="btn sm" type="button" data-ua="${u.is_active ? 'block' : 'unblock'}" data-id="${u.id}">${u.is_active ? 'Заблокировать' : 'Разблокировать'}</button>`}</span></td></tr>`).join('')}
+  $('#u-res').innerHTML = `<div class="tw"><table><thead><tr><th>${T('Имя', 'Імʼя')}</th><th>${T('Логин', 'Логін')}</th><th>${T('Роль', 'Роль')}</th><th>${T('Был', 'Був')}</th><th>${T('Статус', 'Статус')}</th><th></th></tr></thead><tbody>
+    ${list.map(u => `<tr><td><b>${esc(u.full_name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(roleName(u.role))}</td><td>${fmtDT(u.last_seen_at)}</td>
+      <td>${u.is_active ? `<span class="pill ok">${T('активен', 'активний')}</span>` : `<span class="pill er">${T('заблокирован', 'заблокований')}</span>`}</td>
+      <td><span class="uacts"><button class="btn sm" type="button" data-ua="password" data-id="${u.id}">${T('Новый пароль', 'Новий пароль')}</button>
+      ${Auth.user && u.id === Auth.user.id ? '' : `<button class="btn sm" type="button" data-ua="${u.is_active ? 'block' : 'unblock'}" data-id="${u.id}">${u.is_active ? T('Заблокировать', 'Заблокувати') : T('Разблокировать', 'Розблокувати')}</button>`}</span></td></tr>`).join('')}
     </tbody></table></div>`;
   $('#u-res').onclick = async e => {
     const b = e.target.closest('[data-ua]'); if (!b) return;
     const body = { action: b.dataset.ua, id: b.dataset.id };
     const name = b.closest('tr').querySelector('b').textContent;
-    if (body.action === 'password') { body.password = genPassword(); if (!await ask({ title: 'Задать новый пароль?', text: `${esc(name)}: старый пароль перестанет работать, вход на других устройствах закроется.`, ok: 'Задать пароль' })) return; }
+    if (body.action === 'password') { body.password = genPassword(); if (!await ask({ title: T('Задать новый пароль?', 'Задати новий пароль?'), text: esc(name) + T(': старый пароль перестанет работать, вход на других устройствах закроется.', ': старий пароль перестане працювати, вхід на інших пристроях закриється.'), ok: T('Задать пароль', 'Задати пароль') })) return; }
     else if (!await ask(body.action === 'block'
-      ? { title: 'Заблокировать пользователя?', text: `${esc(name)} больше не сможет войти.`, ok: 'Заблокировать', danger: true }
-      : { title: 'Разблокировать пользователя?', text: `${esc(name)} снова сможет войти.`, ok: 'Разблокировать' })) return;
+      ? { title: T('Заблокировать пользователя?', 'Заблокувати користувача?'), text: esc(name) + T(' больше не сможет войти.', ' більше не зможе увійти.'), ok: T('Заблокировать', 'Заблокувати'), danger: true }
+      : { title: T('Разблокировать пользователя?', 'Розблокувати користувача?'), text: esc(name) + T(' снова сможет войти.', ' знову зможе увійти.'), ok: T('Разблокировать', 'Розблокувати') })) return;
     try { const r = await api('/logist/admin/user-action', { method: 'POST', body }); drawUsers(r.users);
-      if (body.password) $('#u-creds').innerHTML = `<div class="creds">Новый пароль: <code>${esc(body.password)}</code> — передайте пользователю</div>`;
+      if (body.password) $('#u-creds').innerHTML = `<div class="creds">${T('Новый пароль', 'Новий пароль')}: <code>${esc(body.password)}</code> — ${T('передайте пользователю', 'передайте користувачу')}</div>`;
     } catch (ex) { toast(ex.message); }
   };
 }
 
 // ─── запуск ───────────────────────────────────────────────
-$('#ver').textContent = 'версия ' + APP_VERSION;
+drawChrome();
 async function boot() {
   if (!Auth.token) return showLogin();
   drawWho();
