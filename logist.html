@@ -242,7 +242,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm4';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm5';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -305,7 +305,7 @@ const SRV_UK = { 'Нужно войти': 'Потрібно увійти', 'Вх
   'Администратор уже создан. Войдите со своим логином': 'Адміністратора вже створено. Увійдіть зі своїм логіном',
   'Логин: 3–32 символа, латиница, цифры, точка, дефис': 'Логін: 3–32 символи, латиниця, цифри, крапка, дефіс', 'Укажите имя': 'Вкажіть імʼя',
   'Неизвестная роль': 'Невідома роль', 'Пароль — не меньше 6 символов': 'Пароль — щонайменше 6 символів', 'Такой логин уже есть': 'Такий логін уже є',
-  'Себя заблокировать нельзя': 'Себе заблокувати не можна', 'Неизвестное действие': 'Невідома дія', 'Не указан день': 'Не вказано день', 'Нет замечания': 'Немає зауваження',
+  'Себя заблокировать нельзя': 'Себе заблокувати не можна', 'Неизвестное действие': 'Невідома дія', 'Не указан день': 'Не вказано день', 'Не указан клиент': 'Не вказано клієнта', 'Нет замечания': 'Немає зауваження',
   'В файле не найдено ни одного маршрутного листа': 'У файлі не знайдено жодного маршрутного листа', 'Пустой ответ базы': 'Порожня відповідь бази' };
 const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
 
@@ -515,7 +515,7 @@ async function loadFile(f) {
   try {
     const d = await api('/logist/check', { method: 'POST', body: { file: f.name, sheets } });
     Geo.stop();
-    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, file: f.name, at: Date.now() };
+    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, places: d.places || {}, file: f.name, at: Date.now() };
     selSheet = null; tab = 'err';
     saveLast();
     drawReport();
@@ -599,7 +599,7 @@ function drawSheets() {
     R.report.sheets.map(s => { const e = sheetErr(s); const sumBad = s.issues.some(i => i.kind === 'sum');
       const rt = Routes.of(s);
       return `<button type="button" class="sh ${selSheet === s.no ? 'on' : ''}" data-no="${esc(s.no)}"><span class="t"><b><span class="sw" style="background:${sheetColor(s)}"></span>${esc(s.code || s.route)}</b>
-      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} ${T('нак.', 'нак.')} · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || T('водитель не указан', 'водія не вказано'))}</span>${rt ? `<span class="km">≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}${rt.straight ? T(' (по прямой)', ' (по прямій)') : ''}</span>` : ''}</span>
+      <span>${esc(s.route.replace(s.code, '').trim())} · ${s.rows.length} ${T('нак.', 'нак.')} · <span class="${sumBad ? 'sum-er' : ''}">${money(s.total)} грн</span></span><span>${esc(s.driver || T('водитель не указан', 'водія не вказано'))}</span>${rt ? `<span class="km">≈ ${Math.round(rt.km)} км · ${fmtMin(rt.min)}${rt.back ? T(' туда и обратно', ' туди й назад') : ''}${rt.straight ? T(' (по прямой)', ' (по прямій)') : ''}</span>` : ''}</span>
       ${e ? `<span class="pill er">${e}</span>` : '<span class="pill ok">' + T('ок', 'ок') + '</span>'}</button>`; }).join('');
   el.onclick = e => { const b = e.target.closest('.sh'); if (!b) return; selSheet = b.dataset.no || null; drawSheets(); drawRows(); drawMap(true); };
 }
@@ -618,7 +618,11 @@ function drawRows() {
     for (const { r, iss, z } of list) {
       const hasErr = iss.some(i => i.sev === 'err');
       const addr = r.eff === 'note' ? `<span class="addr-note">${T('из примечания', 'з примітки')}</span>${esc(r.note)}<div class="mu small">${T('в 1С', 'в 1С')}: ${esc(r.addr)}</div>` : esc(r.addr) + (r.note ? `<div class="mu small">${T('примечание', 'примітка')}: ${esc(r.note.slice(0, 140))}</div>` : '');
-      const geo = z.cls === 'none' ? '' : `<div class="geo-st ${{ ok: 'ok', okap: 'ok', bad: 'er', wa: 'wa', nf: 'mu', pend: 'mu' }[z.cls]}">● ${esc(z.text)}${z.cls === 'nf' || z.cls === 'wa' || z.cls === 'bad' || z.cls === 'okap' ? ` <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">${T('Поставить на карте', 'Поставити на карті')}</button>` : ''}</div>`;
+      const gp = s.type !== 'city' && r.q ? R.geo[r.q] : null;
+      const geoInter = s.type === 'city' || !r.q ? '' : `<div class="geo-st ${!gp ? 'mu' : gp.nf ? 'wa' : 'ok'}">📍 ${esc(r.q.slice(3).split('|')[0])}: ${!gp ? T('ищу на карте…', 'шукаю на карті…') : gp.nf ? T('не найден на карте', 'не знайдено на карті')
+        : gp.manual ? T('точка поставлена вручную', 'точку поставлено вручну') : gp.src === 'справочник' ? T('из справочника', 'з довідника') : esc(gp.label || '')}
+        <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">${gp && !gp.nf ? T('Поправить точку', 'Виправити точку') : T('Поставить на карте', 'Поставити на карті')}</button></div>`;
+      const geo = z.cls === 'none' ? geoInter : `<div class="geo-st ${{ ok: 'ok', okap: 'ok', bad: 'er', wa: 'wa', nf: 'mu', pend: 'mu' }[z.cls]}">● ${esc(z.text)}${z.cls === 'nf' || z.cls === 'wa' || z.cls === 'bad' || z.cls === 'okap' ? ` <button class="btn sm" type="button" data-manual="${esc(s.no)}|${r.n}">${T('Поставить на карте', 'Поставити на карті')}</button>` : ''}</div>`;
       out.push(`<tr class="${hasErr ? 'er-row' : ''} click" data-pt="${esc(s.no)}|${r.n}"><td class="mu">${r.n}</td>
         <td><b>${esc(r.client)}</b><div class="mu small">${esc(r.manager)}${r.inv ? ' · ' + esc(r.inv) : ''}</div></td>
         <td>${addr}${geo}</td><td class="nw">${money(r.sum)}</td>
@@ -786,19 +790,62 @@ async function nominatim(q) {
   const d = await r.json();
   return d.map(x => { const a = x.address || {}; return { lat: +x.lat, lng: +x.lon, house: !!a.house_number, street: a.road || '', label: [a.road, a.house_number].filter(Boolean).join(', ') || x.display_name.split(',').slice(0, 2).join(','), src: 'Nominatim' }; });
 }
-// населённый пункт (межгород): «нп:Берестин|Красноград» — пробуем все написания, только населённые пункты востока Украины
+// населённый пункт (межгород): «нп:Берестин|Красноград». Сначала справочник; иначе поиск —
+// только Украина и только наши области; из одноимённых берём ближайший к Харькову.
+const PLACE_SRC = 'Photon2';                          // метка строгого поиска: старые нестрогие результаты ищем заново
+const OUR_STATES = /(харків|харьков|kharkiv|донець|донецк|donetsk|сум|sumy|полтав|poltava)/i;
+const KH = [49.9935, 36.2304];
+function placeFromBook(q) {
+  for (const name of q.slice(3).split('|')) { const c = (R.places || {})[name]; if (Array.isArray(c) && c.length === 2) return { lat: c[0], lng: c[1], house: false, label: name, src: 'справочник', nf: false }; }
+  return null;
+}
+// куда тянуть выбор среди одноимённых: центр уже известных точек того же маршрута (иначе — Харьков)
+function nearFor(q) {
+  const pts = [];
+  for (const s of R.report.sheets) {
+    if (!s.rows.some(r => r.q === q)) continue;
+    for (const r of s.rows) { const g = r.q && r.q !== q && R.geo[r.q]; if (g && !g.nf && (g.manual || g.src === 'справочник')) pts.push([g.lat, g.lng]); }
+  }
+  return pts.length ? [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length] : KH;
+}
 async function geocodePlace(q) {
-  for (const name of q.slice(3).split('|')) {
+  const near = nearFor(q);
+  const names = q.slice(3).split('|'), cand = [];
+  for (const name of names) {
+    const n0 = lat(name).slice(0, 5);
     try {
-      const r = await fetch('https://photon.komoot.io/api/?limit=5&lang=default&bbox=33.0,47.8,39.0,51.2&osm_tag=place&q=' + encodeURIComponent(name));
-      const d = await r.json();
-      const n0 = lat(name).slice(0, 5);
-      const f = (d.features || []).find(f => lat(f.properties.name || '').startsWith(n0)) || null;
-      if (f) return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], house: false, label: [f.properties.name, f.properties.state].filter(Boolean).join(', '), src: 'Photon', nf: false };
+      const d = await (await fetch('https://photon.komoot.io/api/?limit=10&lang=default&osm_tag=place&bbox=33.0,47.5,39.0,51.5&q=' + encodeURIComponent(name))).json();
+      for (const f of d.features || []) { const p = f.properties;
+        if ((p.countrycode || '').toUpperCase() === 'UA' && OUR_STATES.test(p.state || '') && lat(p.name || '').startsWith(n0))
+          cand.push({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: [p.name, p.county, p.state].filter(Boolean).join(', ') }); }
     } catch (_) {}
     await sleep(1100);
+    if (!cand.length) {
+      try {
+        const d = await (await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=10&accept-language=uk&addressdetails=1&countrycodes=ua&q=' + encodeURIComponent(name))).json();
+        for (const x of d) { const a = x.address || {};
+          if (OUR_STATES.test(a.state || '') && /^(city|town|village|hamlet|suburb)$/.test(x.addresstype || x.type || 'village'))
+            cand.push({ lat: +x.lat, lng: +x.lon, label: [x.name, a.district, a.state].filter(Boolean).join(', ') }); }
+      } catch (_) {}
+      await sleep(1100);
+    }
+    if (cand.length) break;
   }
-  return { nf: true, label: '' };
+  if (!cand.length) return { nf: true, label: '', src: PLACE_SRC };
+  cand.sort((a, b) => hav(near, [a.lat, a.lng]) - hav(near, [b.lat, b.lng]));
+  const c = cand[0];
+  return { lat: c.lat, lng: c.lng, house: false, label: c.label + (cand.length > 1 ? T(' (одноимённых: ', ' (однойменних: ') + cand.length + ')' : ''), src: PLACE_SRC, nf: false };
+}
+// перед поиском: точки из справочника; старые нестрогие результаты по населённым пунктам — забыть
+function prepPlaces() {
+  for (const s of R.report.sheets) for (const r of s.rows) {
+    if (!r.q || !r.q.startsWith('нп:')) continue;
+    const g = R.geo[r.q];
+    if (g && g.manual) continue;
+    const b = placeFromBook(r.q);
+    if (b) { R.geo[r.q] = b; continue; }
+    if (g && g.src !== PLACE_SRC) delete R.geo[r.q];
+  }
 }
 async function geocode(q) {
   if (q.startsWith('нп:')) return geocodePlace(q);
@@ -861,6 +908,21 @@ const Routes = {
       return { line: d.trips[0].geometry.coordinates.map(c => [c[1], c[0]]), km: d.trips[0].distance / 1000, min: d.trips[0].duration / 60, order: wp.map(x => x.q) };
     } finally { clearTimeout(tm); }
   },
+  async osrmLine(pts) {           // межгород: склад → ближайший → … → дальний; обратно тем же путём
+    const wh = this.wh, left = pts.slice(), order = []; let cur = wh;
+    while (left.length) { left.sort((a, b) => hav(cur, a.c) - hav(cur, b.c)); const p = left.shift(); cur = p.c; order.push(p); }
+    const all = [wh, ...order.map(p => p.c)];
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const u = 'https://router.project-osrm.org/route/v1/driving/' + all.map(c => c[1].toFixed(6) + ',' + c[0].toFixed(6)).join(';') + '?overview=full&geometries=geojson';
+      const d = await (await fetch(u, { signal: ctl.signal })).json();
+      if (d.code !== 'Ok') throw 0;
+      return { line: d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]), km: d.routes[0].distance / 1000 * 2, min: d.routes[0].duration / 60 * 2, order: order.map(p => p.q), back: true };
+    } catch (_) {
+      let km = 0; for (let i = 1; i < all.length; i++) km += hav(all[i - 1], all[i]);
+      return { line: all, km: km * 1.3 * 2, min: km * 1.3 * 2 / 50 * 60, order: order.map(p => p.q), back: true, straight: true };
+    } finally { clearTimeout(tm); }
+  },
   async build(run) {
     if (!R || this.busy) return;
     R.routes = R.routes || {};
@@ -872,7 +934,8 @@ const Routes = {
         this.wh = whOf(s);
         if (!pts.length || !this.wh || R.routes[k]) continue;
         let rt;
-        try { rt = await this.osrm(pts); } catch (_) { rt = this.straight(pts); }
+        if (s.type === 'inter') rt = await this.osrmLine(pts);
+        else { try { rt = await this.osrm(pts); } catch (_) { rt = this.straight(pts); } }
         R.routes[k] = rt;
         saveLast(); drawSheets(); drawMap(false);
         await sleep(1100);
@@ -888,6 +951,7 @@ const Geo = {
     if (!R) return;
     const my = ++this.run; this.running = true; this.pause = false;
     // сначала сохраняем зоны по уже известным адресам и находим склады без координат
+    prepPlaces();
     await this.send(null);
     await findWarehouses();
     if (my !== this.run) return;
@@ -912,7 +976,7 @@ const Geo = {
   async send(qs) {
     if (!R) return;
     const set = qs ? new Set(qs) : null, items = [], rows = [], zone = [];
-    if (qs) qs.forEach(q => { const g = R.geo[q]; if (g) items.push({ q, lat: g.lat, lng: g.lng, house: g.house, label: g.label, src: g.src, nf: g.nf, manual: g.manual }); });
+    if (qs) qs.forEach(q => { const g = R.geo[q]; if (g && g.src !== 'справочник') items.push({ q, lat: g.lat, lng: g.lng, house: g.house, label: g.label, src: g.src, nf: g.nf, manual: g.manual }); });
     for (const s of R.report.sheets) for (const r of s.rows) {
       if (s.type !== 'city' || !r.q || !R.geo[r.q] || (set && !set.has(r.q))) continue;
       rows.push({ date: s.date, no: s.no, n: r.n });
@@ -925,26 +989,59 @@ const Geo = {
 };
 
 // ═══ Исправить адрес в 1С ═════════════════════════════════
-let fixDays = 7, fixItems = [];
+let fixDays = 7, fixShow = 'active', fixItems = [];
 async function viewFix() {
-  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Исправить основной адрес в 1С', 'Виправити основну адресу в 1С')}</h1><div class="sub">${T('Клиенты, у которых основной адрес неполный или не по маршруту, а правильный менеджер вписывает в примечание', 'Клієнти, у яких основна адреса неповна або не за маршрутом, а правильну менеджер вписує в примітку')}</div></div>
+  const SHOW = { active: T('Актуальные', 'Актуальні'), fixed: T('Исправленные', 'Виправлені'), hidden: T('Убранные', 'Прибрані') };
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Исправить основной адрес в 1С', 'Виправити основну адресу в 1С')}</h1><div class="sub">${T('Клиенты, у которых основной адрес неполный или не по маршруту, а правильный менеджер вписывает в примечание. «Правильный адрес» можно поправить — так он уйдёт менеджерам в Excel.', 'Клієнти, у яких основна адреса неповна або не за маршрутом, а правильну менеджер вписує в примітку. «Правильну адресу» можна виправити — так вона піде менеджерам в Excel.')}</div></div>
     <div class="bar"><select class="in" id="fix-days"><option value="7">${T('за 7 дней', 'за 7 днів')}</option><option value="14">${T('за 14 дней', 'за 14 днів')}</option><option value="30">${T('за 30 дней', 'за 30 днів')}</option></select>
-    <button class="btn" type="button" id="fix-xls">${T('Скачать Excel', 'Завантажити Excel')}</button></div></div><div id="fix-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
+    <button class="btn" type="button" id="fix-xls">${T('Скачать Excel', 'Завантажити Excel')}</button></div></div>
+    <div class="tabs" id="fix-tabs">${Object.entries(SHOW).map(([k, v]) => `<button type="button" data-show="${k}" class="${k === fixShow ? 'on' : ''}">${v} <span class="mu" data-cnt="${k}"></span></button>`).join('')}</div>
+    <div id="fix-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
   $('#fix-days').value = String(fixDays);
   $('#fix-days').onchange = e => { fixDays = +e.target.value; viewFix(); };
+  $('#fix-tabs').onclick = e => { const b = e.target.closest('[data-show]'); if (!b) return; fixShow = b.dataset.show; viewFix(); };
   $('#fix-xls').onclick = () => {
     if (!fixItems.length) return toast(T('Список пуст', 'Список порожній'));
     const ws = XLSX.utils.json_to_sheet(fixItems.map(x => ({ [T('Менеджер', 'Менеджер')]: x.manager, [T('Клиент', 'Клієнт')]: x.client, [T('Адрес в 1С', 'Адреса в 1С')]: x.addr,
-      [T('Адрес из примечания', 'Адреса з примітки')]: x.note, [T('Что не так', 'Що не так')]: TI(x, 'why'), [T('Раз за период', 'Разів за період')]: x.times, [T('Последний лист', 'Останній лист')]: x.last_date, [T('Маршруты', 'Маршрути')]: x.routes })));
+      [T('Правильный адрес', 'Правильна адреса')]: x.correct, [T('Что не так', 'Що не так')]: TI(x, 'why'), [T('Раз за период', 'Разів за період')]: x.times,
+      [T('Последний лист', 'Останній лист')]: x.last_date, [T('Маршруты', 'Маршрути')]: x.routes })));
+    ws['!cols'] = [{ wch: 28 }, { wch: 40 }, { wch: 45 }, { wch: 45 }, { wch: 50 }, { wch: 8 }, { wch: 12 }, { wch: 14 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, T('Исправить адрес', 'Виправити адресу'));
     XLSX.writeFile(wb, T('Исправить_адрес_в_1С_', 'Виправити_адресу_в_1С_') + todayStr() + '.xlsx');
   };
   try {
-    const d = await api('/logist/fix?days=' + fixDays);
-    fixItems = d.items || [];
-    $('#fix-res').innerHTML = fixItems.length ? `<div class="tw"><table><thead><tr><th>${T('Менеджер', 'Менеджер')}</th><th>${T('Клиент', 'Клієнт')}</th><th>${T('Адрес в 1С', 'Адреса в 1С')}</th><th>${T('Адрес из примечания', 'Адреса з примітки')}</th><th>${T('Раз', 'Разів')}</th><th>${T('Последний', 'Останній')}</th><th>${T('Маршрут', 'Маршрут')}</th></tr></thead><tbody>
-      ${fixItems.map(x => `<tr><td>${esc(x.manager)}</td><td><b>${esc(x.client)}</b></td><td>${esc(x.addr)}<div class="mu small">${esc(TI(x, 'why'))}</div></td><td>${esc(x.note)}</td><td>${x.times}</td><td class="nw">${esc(x.last_date)}</td><td>${esc(x.routes)}</td></tr>`).join('')}
-      </tbody></table></div>` : `<div class="empty card">${T('За этот период таких клиентов нет', 'За цей період таких клієнтів немає')}</div>`;
+    const d = await api('/logist/fix?days=' + fixDays + '&show=' + fixShow);
+    fixItems = (d.items || []).map(x => x.edited ? x : { ...x, correct: String(x.correct || '').replace(/^\s*\d\d\.\d\d\.\d{4}(\s+\d{1,2}:\d{2})?/, '').replace(/\s*\n+\s*/g, ', ').replace(/\s{2,}/g, ' ').replace(/(^|[,\s]+)тел\.?[,\s:]*$/i, '').replace(/^[,\s]+|[,\s(]+$/g, '') });
+    for (const [k, v] of Object.entries(d.counts || {})) { const el = $(`[data-cnt="${k}"]`); if (el) el.textContent = v; }
+    const acts = x => fixShow === 'active'
+      ? `<button class="btn sm" type="button" data-fa="fixed">${T('Исправлено в 1С', 'Виправлено в 1С')}</button><button class="btn sm" type="button" data-fa="hide">${T('Убрать', 'Прибрати')}</button>`
+      : `<span class="mu small">${fixShow === 'fixed' ? T('исправлено ', 'виправлено ') : T('убрано ', 'прибрано ')}${esc(x.status_at || '')}</span><button class="btn sm" type="button" data-fa="restore">${T('Вернуть', 'Повернути')}</button>`;
+    $('#fix-res').innerHTML = fixItems.length ? `<div class="tw"><table><thead><tr><th>${T('Менеджер', 'Менеджер')}</th><th>${T('Клиент', 'Клієнт')}</th><th>${T('Адрес в 1С', 'Адреса в 1С')}</th>
+      <th>${T('Правильный адрес', 'Правильна адреса')}</th><th>${T('Раз', 'Разів')}</th><th>${T('Последний', 'Останній')}</th><th></th></tr></thead><tbody>
+      ${fixItems.map((x, i) => `<tr data-i="${i}"><td>${esc(x.manager)}</td><td><b>${esc(x.client)}</b><div class="mu small">${esc(x.routes)}</div></td>
+        <td>${esc(x.addr)}<div class="mu small">${esc(TI(x, 'why'))}</div></td>
+        <td style="min-width:240px"><textarea class="in" rows="2" data-addr="1" style="width:100%;min-height:54px;padding:6px 8px;font-size:13px">${esc(x.correct || '')}</textarea>
+          ${x.edited ? `<div class="mu small">${T('поправлено вручную', 'виправлено вручну')}</div>` : ''}</td>
+        <td>${x.times}</td><td class="nw">${esc(x.last_date)}</td><td><span class="uacts">${acts(x)}</span></td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty card">${fixShow === 'active' ? T('За этот период таких клиентов нет', 'За цей період таких клієнтів немає') : T('Пусто', 'Порожньо')}</div>`;
+    const res = $('#fix-res');
+    res.onclick = async e => {
+      const b = e.target.closest('[data-fa]'); if (!b) return;
+      const x = fixItems[+b.closest('tr').dataset.i];
+      b.disabled = true;
+      try {
+        await api('/logist/fix-action', { method: 'POST', body: { client: x.client, action: b.dataset.fa } });
+        toast({ fixed: T('Отмечено: исправлено в 1С. Вернётся, если ошибка повторится', 'Позначено: виправлено в 1С. Повернеться, якщо помилка повториться'),
+          hide: T('Клиент убран из списка', 'Клієнта прибрано зі списку'), restore: T('Клиент возвращён в список', 'Клієнта повернуто до списку') }[b.dataset.fa]);
+        viewFix();
+      } catch (ex) { toast(ex.message); b.disabled = false; }
+    };
+    res.onchange = async e => {
+      const ta = e.target.closest('[data-addr]'); if (!ta) return;
+      const x = fixItems[+ta.closest('tr').dataset.i], v = ta.value.trim();
+      try { await api('/logist/fix-action', { method: 'POST', body: { client: x.client, action: 'addr', addr: v } }); x.correct = v || x.note; toast(T('Адрес сохранён', 'Адресу збережено')); }
+      catch (ex) { toast(ex.message); }
+    };
   } catch (e) { $('#fix-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 
