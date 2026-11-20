@@ -461,7 +461,8 @@ const I18N_UK = {
   'Как по умолчанию': 'Як за замовчуванням', 'Какие фото уходят в 1С и какое главное — в карточке товара: под каждым фото «в 1С» и «Сделать главным». По умолчанию — все, кроме этикетки.': 'Які фото йдуть в 1С і яке головне — у картці товару: під кожним фото «в 1С» і «Зробити головним». За замовчуванням — усі, крім етикетки.', 'В 1С нужен настоящий код, а не временный NEW-…. Впишите его:': 'В 1С потрібен справжній код, а не тимчасовий NEW-…. Впишіть його:', 'Оставьте хотя бы одно фото для 1С': 'Залиште хоча б одне фото для 1С', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
   'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код',
   // ── каталог сайта (a15) ──
-  'Каталог сайта': 'Каталог сайту',
+  'Каталог сайта': 'Каталог сайту', 'авто, изменения': 'авто, зміни', 'Изменения получены не полностью': 'Зміни отримано не повністю',
+  'Товары, штрихкоды и фото с сайта k-h.com.ua. Новые и изменённые товары — каждые 15 минут, весь каталог — ночью в 03:00': 'Товари, штрихкоди й фото із сайту k-h.com.ua. Нові та змінені товари — кожні 15 хвилин, увесь каталог — вночі о 03:00',
   'Товары, штрихкоды и фото с сайта k-h.com.ua. Обновляется сам каждую ночь в 03:00': 'Товари, штрихкоди й фото із сайту k-h.com.ua. Оновлюється сам щоночі о 03:00',
   'Загрузить сейчас': 'Завантажити зараз', 'Загрузка запущена': 'Завантаження запущено',
   'Идёт загрузка с сайта': 'Триває завантаження із сайту',
@@ -685,7 +686,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a17';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a18';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -2150,7 +2151,7 @@ function catalogErr(e) { return e && e.status === 404 ? 'Воркфлоу «ка
 async function viewCatalog() {
   navOn('catalog');
   const req = ++catalogReq;
-  view.innerHTML = `<div class="hd"><div><h1>Каталог сайта</h1><div class="sub">Товары, штрихкоды и фото с сайта k-h.com.ua. Обновляется сам каждую ночь в 03:00</div></div>
+  view.innerHTML = `<div class="hd"><div><h1>Каталог сайта</h1><div class="sub">Товары, штрихкоды и фото с сайта k-h.com.ua. Новые и изменённые товары — каждые 15 минут, весь каталог — ночью в 03:00</div></div>
       <div class="bar"><button class="btn" type="button" id="c-refresh">Обновить</button><button class="btn pri" type="button" id="c-sync">Загрузить сейчас</button></div></div>
     <div id="c-body"><div class="loading">Загрузка…</div></div>`;
   $('#c-refresh').onclick = () => drawCatalog(req);
@@ -2173,7 +2174,7 @@ async function drawCatalog(req) {
   const s = d.stats || {}, runs = d.runs || [], cur = d.running ? runs.find(r => r.status === 'running') : null;
   $('#c-sync').disabled = !!d.running;
   const runState = r => r.status === 'ok' ? '<span class="pill ok">готово</span>' : r.status === 'error' ? '<span class="pill er">ошибка</span>' : '<span class="pill bl">идёт</span>';
-  const runWho = r => r.trigger === 'schedule' ? '<span>ночью, авто</span>' : `<span data-noi18n>${esc(r.started_by || '—')}</span>`;
+  const runWho = r => r.trigger === 'incremental' ? '<span>авто, изменения</span>' : r.trigger === 'schedule' ? '<span>ночью, авто</span>' : `<span data-noi18n>${esc(r.started_by || '—')}</span>`;
   const runNote = r => r.error || r.note ? `<span class="${r.error ? 'err' : 'mu'}" style="padding:0;background:none;border:0">${esc(r.error || r.note)}</span>` : '';
   box.innerHTML = `
     ${cur ? `<div class="card" style="margin-bottom:14px"><b>Идёт загрузка с сайта</b>
