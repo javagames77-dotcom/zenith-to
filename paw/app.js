@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -136,6 +136,8 @@ const I18N_UK = {
 const I18N_RX = [
   [/^Удалить приёмку «(.*)»\? В ней ещё нет фото\.$/, m => `Видалити приймання «${m[1].replace(/^Приёмка товара/, 'Приймання товару')}»? У ньому ще немає фото.`],
   [/^Штрихкод: (.+)\. Читаю этикетку…$/, m => `Штрихкод: ${m[1]}. Читаю етикетку…`],
+  [/^На сайте уже есть (\d+) фото этого товара$/, m => `На сайті вже є ${m[1]} фото цього товару`],
+  [/^на сайте (\d+) фото$/, m => `на сайті ${m[1]} фото`],
   [/^Приёмка товара (.+)$/, m => `Приймання товару ${m[1]}`],
   [/^Не сняты товаров: (\d+)\. Всё равно передать приёмку завскладу\?$/, m => `Не знято товарів: ${m[1]}. Усе одно передати приймання завскладу?`],
   [/^Показать ещё · осталось (\d+)$/, m => `Показати ще · залишилось ${m[1]}`],
@@ -255,7 +257,7 @@ Object.assign(I18N_UK, {
   'по похожим артикулам — проверьте': 'за схожими артикулами — перевірте', 'от прошлого товара — проверьте': 'від попереднього товару — перевірте', 'новый бренд с этикетки — проверьте': 'новий бренд з етикетки — перевірте',
   'этикетка не распознана — проверьте': 'етикетку не розпізнано — перевірте', 'не распознан — проверьте': 'не розпізнано — перевірте',
   'совпал с этикеткой': 'збігся з етикеткою', 'прочитан с этикетки — проверьте': 'прочитано з етикетки — перевірте', 'на этикетке:': 'на етикетці:',
-  'по истории артикула': 'за історією артикула', 'с этикетки': 'з етикетки', 'Номер производителя:': 'Номер виробника:', 'Здесь пусто': 'Тут порожньо',
+  'по истории артикула': 'за історією артикула', 'с этикетки': 'з етикетки', 'с сайта': 'із сайту', 'Номер производителя:': 'Номер виробника:', 'Здесь пусто': 'Тут порожньо',
   'Бренд для всех товаров приёмки. Если попадётся другой — поменяете при добавлении товара.': 'Бренд для всіх товарів приймання. Якщо трапиться інший — зміните під час додавання товару.',
   'Бренд, например KAP': 'Бренд, наприклад KAP', 'Начать приёмку': 'Почати приймання', 'Выберите или введите бренд': 'Оберіть або введіть бренд',
   'Нет сети. Начать приёмку можно только онлайн': 'Немає мережі. Почати приймання можна лише онлайн',
@@ -553,6 +555,28 @@ async function loadTask(id, { cachedFirst = false } = {}) {
   drawQueueChip();
   return S.task[id];
 }
+// ─── каталог сайта k-h.com.ua: сколько фото товара уже на сайте (по коду 1С) ───
+const SITE = {};    // taskId → { t, items: { item_id: товар сайта } }
+async function loadSite(taskId) {
+  const c = SITE[taskId];
+  if (c && Date.now() - c.t < 300000) return false;
+  try {
+    const r = await api('/photo/catalog-task', { method: 'POST', body: { task_id: num(taskId) } });
+    SITE[taskId] = { t: Date.now(), items: r.items || {} };
+    return Object.keys(SITE[taskId].items).length > 0;
+  } catch (_) { return false; }            // нет сети или каталог не подключён — просто без пометок
+}
+function sitePh(taskId, it) { const c = SITE[num(taskId)] || SITE[taskId]; const p = c && c.items[it.id]; return p && num(p.photo_count) ? p : null; }
+function sitePhotosHtml(n, urls) {
+  if (!num(n)) return '';
+  const u = (urls || []).slice(0, 4);
+  return `<div class="note"><div>${esc('На сайте уже есть ' + num(n) + ' фото этого товара')}</div>`
+    + (u.length ? `<div class="site-th">${u.map((x, k) => `<img src="${esc(x)}" alt="" loading="lazy" data-sp="${k}">`).join('')}</div>` : '') + '</div>';
+}
+function bindSitePhotos(urls) {
+  const list = (urls || []).slice(0, 6).map(src => ({ src, cap: '' }));
+  app.querySelectorAll('[data-sp]').forEach(el => el.onclick = () => openPhotos(list, +el.dataset.sp));
+}
 function findItem(taskId, itemId) { const d = S.task[taskId]; return d && (d.items || []).find(i => num(i.id) === num(itemId)); }
 
 // ─── отправка очереди ─────────────────────────────────────
@@ -777,7 +801,8 @@ async function viewTask(id) {
     body.innerHTML = list.map(i => {
       const n = num(i.photos_stored) + localCount(i);
       const pill = i.status === 'done' ? '<span class="pill ok">снят</span>' : i.status === 'absent' ? '<span class="pill er">нет</span>' : n ? `<span class="pill bl">${n} фото</span>` : '<span class="pill">не снят</span>';
-      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
+      const sp = sitePh(d.task.id, i);
+      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}${sp ? ` · <span class="wa">${esc('на сайте ' + num(sp.photo_count) + ' фото')}</span>` : ''}</span></a>`;
     }).join('') || `<div class="empty">${q ? 'Ничего не найдено' : 'Здесь пусто'}</div>`;
     const rest = total - list.length, mb = $('#more');
     mb.hidden = rest <= 0;
@@ -790,6 +815,7 @@ async function viewTask(id) {
   $('#scan').onclick = () => { location.hash = '#scan-' + num(d.task.id); };
   Pull.on(() => viewTask(id));
   draw();
+  loadSite(id).then(ch => { if (ch && location.hash === '#task-' + num(id)) draw(true); });
 }
 
 // ─── Товар: съёмка ────────────────────────────────────────
@@ -798,6 +824,7 @@ async function viewItem(taskId, itemId) {
   if (!S.task[taskId]) { loading(); try { await loadTask(taskId); } catch (e) { return failView(e, () => viewItem(taskId, itemId)); } }
   await refreshQueue();
   drawItem(taskId, itemId);
+  loadSite(taskId).then(ch => { if (ch && location.hash === `#item-${num(taskId)}-${num(itemId)}`) drawItem(taskId, itemId); });
 }
 function localSrc(q) { return q.file_base64 ? 'data:' + (q.type || 'image/jpeg') + ';base64,' + q.file_base64 : ''; }
 function drawItem(taskId, itemId) {
@@ -820,6 +847,7 @@ function drawItem(taskId, itemId) {
         <div class="sub">${esc(it.name || '')}</div>
         <div class="sub mono" style="font-size:12.5px">код 1С ${esc(it.code_1c)}${it.row_no ? ' · № ' + esc(it.row_no) : ''}</div>
       </div>
+      ${(sp => sp ? sitePhotosHtml(sp.photo_count, sp.photos) : '')(sitePh(taskId, it))}
       <div class="card" style="display:flex;justify-content:space-between;align-items:center"><span class="mu">Ячейка на складе</span><b class="mono" style="font-size:20px">${it.cell ? esc(it.cell) : '—'}</b></div>
       ${it.status === 'done' ? '<div class="info">Товар отмечен снятым. Можно доснять фото.</div>' : it.status === 'absent' ? '<div class="note">Отмечено: нет на приёмке.</div>' : ''}
       <div class="card">
@@ -855,6 +883,7 @@ function drawItem(taskId, itemId) {
   });
   $('#absent').onclick = () => setStatus(taskId, it, 'absent', n);
   offerLink(taskId, it);
+  const sp = sitePh(taskId, it); bindSitePhotos(sp && sp.photos);
 }
 function takePhoto(taskId, it, n) {
   if (n >= MAX_PHOTOS) { toast('Уже ' + MAX_PHOTOS + ' фото — это максимум'); return; }
@@ -1003,6 +1032,27 @@ async function readLabel(taskId, file) {
   if (ex) { URL.revokeObjectURL(url); toast('Этот товар уже в приёмке — открываю'); location.hash = `#item-${num(taskId)}-${num(ex.id)}`; return; }
   const cand = codes.length ? codeCandidates(codes[0]) : [];
   const article = cand[cand.length - 1] || codes[0] || '';
+  // каталог сайта: штрихкод есть на сайте → код 1С, бренд и название известны, ИИ не нужен
+  let site = null;
+  if (codes.length) {
+    try {
+      const r = await Promise.race([
+        api('/photo/catalog-lookup', { method: 'POST', body: { codes: [...new Set([...codes, ...cand])] } }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000))
+      ]);
+      site = r && r.product;
+    } catch (_) { site = null; }
+    if (readLabel.cur !== my) return;
+  }
+  if (site) {
+    const ex3 = d ? matchAny(d.items || [], [site.sku, site.article].filter(Boolean)) : null;
+    if (ex3) { URL.revokeObjectURL(url); toast('Этот товар уже в приёмке — открываю'); location.hash = `#item-${num(taskId)}-${num(ex3.id)}`; return; }
+    const fromSite = { article: site.article || article, brand: site.brand || '', brand_source: 'catalog', name: site.name || '', name_source: 'catalog',
+      code_1c: site.sku || '', article_check: 'catalog', site_photos: num(site.photo_count), site_photo_urls: site.photos || [] };
+    labelShot = { taskId: num(taskId), file, url, ai: fromSite, article: fromSite.article };
+    location.hash = '#addi-' + num(taskId) + '-' + encodeURIComponent(fromSite.article);
+    return;
+  }
   st(codes.length ? 'Штрихкод: ' + article + '. Читаю этикетку…' : 'Штрихкод не найден. Читаю этикетку…');
   let ai = null;
   try {
@@ -1075,11 +1125,11 @@ async function viewAddIntake(taskId, code) {
   const name = ai.name || pre.name || '';
   const code1c = ai.code_1c || pre.code_1c || '';
   const bNote = {
-    history: ['по истории артикула', ''], label: ['с этикетки', ''],
+    history: ['по истории артикула', ''], label: ['с этикетки', ''], catalog: ['с сайта', ''],
     prefix: ['по похожим артикулам — проверьте', 'need'], label_new: ['новый бренд с этикетки — проверьте', 'need'],
     none: [shot && !shot.ai ? 'этикетка не распознана — проверьте' : 'не распознан — проверьте', 'need']
   }[ai.brand_source || (shot ? 'none' : '')] || (brandGuess ? ['от прошлого товара — проверьте', 'need'] : ['', '']);
-  const aNote = ai.article_check === 'confirmed' ? ['совпал с этикеткой', ''] : ai.article_check === 'label' ? ['прочитан с этикетки — проверьте', 'need'] : ['', ''];
+  const aNote = ai.article_check === 'catalog' ? ['с сайта', ''] : ai.article_check === 'confirmed' ? ['совпал с этикеткой', ''] : ai.article_check === 'label' ? ['прочитан с этикетки — проверьте', 'need'] : ['', ''];
   const chips = [...new Set([brand, ai.brand_label && ai.brand_conflict ? ai.brand_label : '', lastTaskBrand(d), last].filter(Boolean))].slice(0, 4);
   app.innerHTML = `
     <div class="stack">
@@ -1089,8 +1139,10 @@ async function viewAddIntake(taskId, code) {
       <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Бренд</span>${bNote[0] ? ' · <span class="' + (bNote[1] ? 'wa' : 'ok') + '">' + bNote[0] + '</span>' : ''}${ai.brand_conflict ? ' · <span class="wa">на этикетке: <b data-noi18n>' + esc(ai.brand_label) + '</b></span>' : ''}</span>
         <input class="in${bNote[1] ? ' need' : ''}" id="a-brand" value="${esc(brand)}" autocomplete="off"></label>
       ${chips.length > 1 ? `<div class="chips" id="a-brands">${chips.map(c => `<button type="button" data-b="${esc(c)}" data-noi18n>${esc(c)}</button>`).join('')}</div>` : ''}
-      ${name ? `<label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Название</span> · <span class="ok">${ai.name_source === 'history' ? 'по истории артикула' : 'с этикетки'}</span></span><input class="in" id="a-name" value="${esc(name)}" autocomplete="off"></label>` : ''}
+      ${name ? `<label class="stack" style="gap:4px"><span class="mu" style="font-size:13px"><span>Название</span> · <span class="ok">${ai.name_source === 'history' ? 'по истории артикула' : ai.name_source === 'catalog' ? 'с сайта' : 'с этикетки'}</span></span><input class="in" id="a-name" value="${esc(name)}" autocomplete="off"></label>` : ''}
       ${ai.oem ? `<div class="mu" style="font-size:13px">Номер производителя: <b class="mono">${esc(ai.oem)}</b></div>` : ''}
+      ${ai.brand_source === 'catalog' && ai.code_1c ? `<div class="mu" style="font-size:13px"><span>Код 1С</span> <b class="mono" data-noi18n>${esc(ai.code_1c)}</b> · <span class="ok">с сайта</span></div>` : ''}
+      ${sitePhotosHtml(ai.site_photos, ai.site_photo_urls)}
       <details class="more-f"><summary>Дополнительно (необязательно)</summary>
         <div class="stack" style="margin-top:10px">
           <label class="stack" style="gap:4px"><span class="mu" style="font-size:13px">Код 1С</span><input class="in mono" id="a-code" value="${esc(code1c)}" autocomplete="off"></label>
@@ -1101,6 +1153,7 @@ async function viewAddIntake(taskId, code) {
     </div>
     <div class="dock"><div class="in-dock"><button class="btn pri big" type="button" id="a-save">Добавить и снимать</button></div></div>`;
   if ($('#a-brands')) $('#a-brands').querySelectorAll('[data-b]').forEach(c => c.onclick = () => { $('#a-brand').value = c.dataset.b; $('#a-brand').classList.remove('need'); });
+  bindSitePhotos(ai.site_photo_urls);
   $('#a-save').onclick = async () => {
     const body = {
       article: $('#a-article').value.trim(), brand: $('#a-brand').value.trim(),
@@ -1115,7 +1168,7 @@ async function viewAddIntake(taskId, code) {
       try { localStorage.setItem('zf-brand', body.brand); } catch (_) {}
       if (shot && r.created) {
         await queueLabelPhoto(r.task_id, r.item_id, shot.file);
-        if (shot.ai) api('/photo/label-attach', { method: 'POST', body: { item_id: num(r.item_id), ai: { ...shot.ai, brand: body.brand } } }).catch(() => {});
+        if (shot.ai) api('/photo/label-attach', { method: 'POST', body: { item_id: num(r.item_id), ai: { ...shot.ai, brand: body.brand, site_photo_urls: undefined } } }).catch(() => {});
       }
       if (shot) { labelShot = null; }
       await loadTask(r.task_id);
