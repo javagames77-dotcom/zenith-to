@@ -181,6 +181,15 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .ig tr.ver td { background: var(--ok-bg); }
 .ig .ai-n { font-size: 11.5px; color: var(--mu); margin-top: 3px; }
 .ig .ai-n.wa { color: var(--wa); }
+.ig .ai-n.ok { color: var(--ok); }
+.ig .sug { margin-top: 6px; padding: 6px 8px; border-radius: 8px; background: var(--bl-bg); font-size: 12px; line-height: 1.35; min-width: 190px; }
+.ig .sug + .sug { margin-top: 4px; }
+.ig .sug .sg-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ig .sug .btn.sm { min-height: 26px; padding: 0 8px; }
+.ig .sg-more { background: none; border: 0; padding: 2px 0; margin-top: 2px; color: var(--bl); font: inherit; font-size: 11.5px; cursor: pointer; text-decoration: underline; }
+.ig .sug .mono { font-family: "PT Mono", ui-monospace, monospace; font-weight: 700; }
+.ig .sug .mu { font-size: 11.5px; }
+.ig .sug .pill { font-size: 10.5px; }
 .ig img.th { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; display: block; }
 .ig .noph { width: 54px; height: 54px; border-radius: 8px; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--mu); font-size: 11px; }
 .thm { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
@@ -468,7 +477,12 @@ const I18N_UK = {
   'Загрузка уже идёт': 'Завантаження вже триває', 'Прервана: нет ответа больше 40 минут': 'Перервано: немає відповіді понад 40 хвилин',
   'Каталог получен не полностью — пропавшие товары не удалялись': 'Каталог отримано не повністю — зниклі товари не видалялися',
   'Воркфлоу «каталог сайта» не установлен или не опубликован в n8n': 'Воркфлоу «каталог сайту» не встановлено або не опубліковано в n8n',
-  'Без фото — без служебных позиций («_Акція…», материалы цеха).': 'Без фото — без службових позицій («_Акція…», матеріали цеху).'
+  'Без фото — без служебных позиций («_Акція…», материалы цеха).': 'Без фото — без службових позицій («_Акція…», матеріали цеху).',
+  // ── подсказки из каталога в проверке приёмки (a16) ──
+  'с сайта': 'із сайту', 'Подставить': 'Підставити', 'совпадает с сайтом': 'збігається із сайтом', 'другой бренд': 'інший бренд',
+  'служебная': 'службова', 'Подставить с сайта': 'Підставити із сайту', 'Подставлено с сайта': 'Підставлено із сайту',
+  'по штрихкоду': 'за штрихкодом', 'по артикулу': 'за артикулом', 'по внутр. артикулу': 'за внутр. артикулом', 'по номеру производителя': 'за номером виробника',
+  'Подсказки «с сайта» — из каталога k-h.com.ua по штрихкоду, артикулу и номеру производителя. «Подставить» вписывает код 1С, а пустое название — из каталога.': 'Підказки «із сайту» — з каталогу k-h.com.ua за штрихкодом, артикулом і номером виробника. «Підставити» вписує код 1С, а порожню назву — з каталогу.'
 };
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
@@ -493,6 +507,8 @@ const I18N_RX = [
   [/^Все (\d+)$/, m => `Усі ${m[1]}`],
   [/^(\d+) мин (\d+) с$/, m => `${m[1]} хв ${m[2]} с`],
   [/^(\d+) с$/, m => `${m[1]} с`],
+  [/^на сайте (\d+) фото$/, m => `на сайті ${m[1]} фото`],
+  [/^ещё (\d+) на сайте$/, m => `ще ${m[1]} на сайті`],
   [/^записано страниц: (\d+), товаров: (\d+)$/, m => `записано сторінок: ${m[1]}, товарів: ${m[2]}`],
   [/^Записано страниц: (\d+) из (\d+)$/, m => `Записано сторінок: ${m[1]} з ${m[2]}`],
   [/^Пришло подозрительно мало товаров \((\d+)\) — пропавшие товары не удалялись$/, m => `Надійшло підозріло мало товарів (${m[1]}) — зниклі товари не видалялися`],
@@ -668,7 +684,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a15';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a16';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1952,14 +1968,41 @@ async function viewIntake(id) {
     <div class="crumb"><a href="#task-${num(t.id)}">← ${esc(t.title)}</a></div>
     <div class="hd"><div><h1>Проверка данных приёмки</h1>
       <div class="sub"><span>Фотограф</span> <span data-noi18n>${esc(t.photographer || '—')}</span>${t.intake_brand ? ` · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand)}</b>` : ''} · <span>${t.finished_at ? 'передано ' + fmtDate(t.finished_at) : 'идёт приёмка'}</span></div></div>
-      <div class="bar"><button class="btn" type="button" id="i-all">Отметить все проверенными</button><button class="btn pri" type="button" id="i-xls">Скачать Excel</button></div></div>
+      <div class="bar"><button class="btn" type="button" id="i-sug" hidden><span>Подставить с сайта</span> <span data-noi18n id="i-sug-n"></span></button><button class="btn" type="button" id="i-all">Отметить все проверенными</button><button class="btn pri" type="button" id="i-xls">Скачать Excel</button></div></div>
     <div class="bar" style="margin-bottom:10px"><span class="prog wide"><i id="i-prog"></i></span><span class="mu" id="i-cnt"></span></div>
     <div class="tabs" role="tablist">
       <button type="button" data-if="all">Все</button><button type="button" data-if="nover">Не проверены</button><button type="button" data-if="need">Нужно дописать</button>
     </div>
     <div class="tw ig"><table><thead><tr><th>Фото</th><th>Артикул</th><th>Бренд</th><th>Код 1С</th><th>Номенклатура</th><th>Ячейка</th><th>Статус</th><th>Проверено</th></tr></thead><tbody id="i-rows"></tbody></table></div>
-    <p class="mu" style="font-size:12.5px;margin-top:10px">Изменения сохраняются сразу. Артикул и бренд товара с фото менять нельзя — по ним названы файлы.</p>`;
+    <p class="mu" style="font-size:12.5px;margin-top:10px">Изменения сохраняются сразу. Артикул и бренд товара с фото менять нельзя — по ним названы файлы.</p>
+    <p class="mu" id="i-sug-hint" style="font-size:12.5px;margin-top:4px" hidden>Подсказки «с сайта» — из каталога k-h.com.ua по штрихкоду, артикулу и номеру производителя. «Подставить» вписывает код 1С, а пустое название — из каталога.</p>`;
   const body = $('#i-rows');
+  // подсказки из каталога сайта (воркфлоу 9): item_id → до 3 кандидатов; без воркфлоу 9 просто не показываются
+  let M = {}; const sugOpen = new Set();
+  const HOW = { barcode: 'по штрихкоду', article: 'по артикулу', internal: 'по внутр. артикулу', oem: 'по номеру производителя' };
+  // точное совпадение для «Подставить с сайта»: временный код, первый кандидат того же бренда, не служебный и единственный такой
+  const sure = i => { const c = M[i.id] || []; return isTmpCode(i.code_1c) && c[0] && c[0].sku && c[0].brand_ok && !c[0].service && !c[0].same_code && !c.slice(1).some(x => x.brand_ok && !x.service); };
+  function sugHtml(i) {
+    const c = M[i.id] || [];
+    if (!c.length) return '';
+    if (c.some(x => x.same_code)) return '<div class="ai-n ok"><span>совпадает с сайтом</span></div>';
+    const open = sugOpen.has(num(i.id));
+    return c.filter(x => x.sku).slice(0, open ? 3 : 1).map((x, k) => `<div class="sug"><div class="sg-h"><span>с сайта</span> <span class="mono" data-noi18n>${esc(x.sku)}</span>
+        <button class="btn sm" type="button" data-sug="${num(i.id)}:${k}">Подставить</button></div>
+        ${x.name ? `<div data-noi18n>${esc(x.name)}</div>` : ''}
+        <div class="mu"><span data-noi18n>${esc(x.brand || '—')}</span> · <span>${HOW[x.how] || ''}</span>
+          ${!x.brand_ok && i.brand ? ' <span class="pill wa">другой бренд</span>' : ''}${x.service ? ' <span class="pill">служебная</span>' : ''}
+          ${num(x.photo_count) ? ` <span class="pill">${esc('на сайте ' + num(x.photo_count) + ' фото')}</span>` : ''}</div></div>`).join('')
+      + (!open && c.length > 1 ? `<button class="sg-more" type="button" data-sgm="${num(i.id)}">${esc('ещё ' + (num(c[0].total) - 1) + ' на сайте')}</button>` : '')
+      + (open && num(c[0].total) > c.length ? `<div class="ai-n">${esc('ещё ' + (num(c[0].total) - c.length) + ' на сайте')}</div>` : '');
+  }
+  async function applySug(it, x) {
+    await api('/photo/admin/item-edit', { method: 'POST', body: { item_id: num(it.id), field: 'code_1c', value: x.sku } });
+    it.code_1c = x.sku;
+    if (!it.name && x.name) { await api('/photo/admin/item-edit', { method: 'POST', body: { item_id: num(it.id), field: 'name', value: x.name } }); it.name = x.name; }
+    M[it.id] = [{ ...x, same_code: true }];
+    delete taskCache[t.id];
+  }
   const count = () => {
     const v = items.filter(i => i.verified_at).length;
     $('#i-cnt').textContent = 'проверено ' + v + ' из ' + items.length;
@@ -1978,7 +2021,7 @@ async function viewIntake(id) {
     const list = items.filter(i => intakeF === 'all' || (intakeF === 'nover' && !i.verified_at) || (intakeF === 'need' && need(i)));
     body.innerHTML = list.map(i => `<tr class="${i.verified_at ? 'ver' : ''}">
       <td><a href="#item-${num(t.id)}-${num(i.id)}" title="Открыть товар">${i.first_photo ? `<img class="th" src="${esc(thumbUrl(i.first_photo))}" alt="">` : '<span class="noph">нет фото</span>'}</a></td>
-      <td>${inp(i, 'article', true)}${aiNote(i, 'article')}</td><td>${inp(i, 'brand')}${aiNote(i, 'brand')}</td><td>${inp(i, 'code_1c', true)}</td>
+      <td>${inp(i, 'article', true)}${aiNote(i, 'article')}</td><td>${inp(i, 'brand')}${aiNote(i, 'brand')}</td><td>${inp(i, 'code_1c', true)}${sugHtml(i)}</td>
       <td style="min-width:300px">${inp(i, 'name')}${aiNote(i, 'name')}</td><td>${inp(i, 'cell', true)}</td>
       <td>${statusPill(i)}<div class="mu">${num(i.photos_stored)} фото</div></td>
       <td class="ck"><input type="checkbox" data-ver="${num(i.id)}"${i.verified_at ? ' checked' : ''} aria-label="Проверено"></td></tr>`).join('')
@@ -1995,6 +2038,18 @@ async function viewIntake(id) {
       } catch (e) { toast(e.message, 4000); el.value = f === 'code_1c' && isTmpCode(it.code_1c) ? '' : (it[f] || ''); }
       el.disabled = false;
     });
+    body.querySelectorAll('[data-sgm]').forEach(b => b.onclick = () => { sugOpen.add(num(b.dataset.sgm)); draw(); });
+    body.querySelectorAll('[data-sug]').forEach(b => b.onclick = async () => {
+      const [id, k] = b.dataset.sug.split(':').map(Number);
+      const it = items.find(x => num(x.id) === id), x = (M[id] || [])[k];
+      if (!it || !x) return;
+      b.disabled = true;
+      try { await applySug(it, x); toast('Подставлено с сайта'); } catch (e) { toast(e.message, 4000); }
+      draw();
+    });
+    const ns = items.filter(sure).length;
+    $('#i-sug').hidden = !ns; $('#i-sug-n').textContent = '(' + ns + ')';
+    $('#i-sug-hint').hidden = !Object.keys(M).length;
     body.querySelectorAll('[data-ver]').forEach(c => c.onchange = () => {
       const it = items.find(x => num(x.id) === num(c.dataset.ver));
       if (c.checked && it && isTmpCode(it.code_1c) && !confirm('Нет кода 1С (стоит временный ' + it.code_1c + '). Всё равно отметить проверенным?')) { c.checked = false; return; }
@@ -2017,12 +2072,25 @@ async function viewIntake(id) {
     if (miss && !confirm('У товаров: ' + miss + ' нет кода 1С или названия. Всё равно отметить все проверенными?')) return;
     verify(ids, true);
   };
+  $('#i-sug').onclick = async () => {
+    const list = items.filter(sure);
+    if (!list.length) return;
+    if (!confirm('Подставить код 1С с сайта у товаров: ' + list.length + '? Только точные совпадения: тот же бренд, один товар на сайте.')) return;
+    const b = $('#i-sug'); b.disabled = true;
+    let n = 0, err = '';
+    for (const it of list) { try { await applySug(it, M[it.id][0]); n++; } catch (e) { err = e.message; } }
+    b.disabled = false; draw();
+    toast(err ? err : 'Подставлено с сайта', 4000);
+  };
   $('#i-xls').onclick = async () => {
     const b = $('#i-xls'); b.disabled = true;
     try { delete taskCache[t.id]; exportTaskXlsx(await loadTask(t.id)); } catch (e) { toast(e.message); }
     b.disabled = false;
   };
   draw();
+  api('/photo/admin/catalog-match', { method: 'POST', body: { task_id: num(t.id) } })
+    .then(r => { if (location.hash !== '#intake-' + num(id)) return; M = r.matches || {}; draw(); })
+    .catch(() => {});
 }
 
 // ─── Тест распознавания этикеток (администратор) ──────────
