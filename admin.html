@@ -235,7 +235,7 @@ tr.day td { background: var(--chip); font-weight: 700; font-size: 12.5px; paddin
   <nav class="side" aria-label="Разделы">
     <a href="#tasks" data-nav="tasks">Задания</a>
     <a href="#new" data-nav="new">Новое задание</a>
-    <a class="soon" aria-disabled="true">Каталог</a>
+    <a href="#catalog" data-nav="catalog" id="nav-catalog" hidden>Каталог</a>
     <a href="#links" data-nav="links">Связки кодов</a>
     <a href="#users" data-nav="users" id="nav-users" hidden>Пользователи</a>
     <a href="#audit" data-nav="audit" id="nav-audit" hidden>Журнал</a>
@@ -357,7 +357,7 @@ const I18N_UK = {
   'Имя и логин': 'Ім’я та логін', 'Роль': 'Роль', 'Последний вход': 'Останній вхід', 'активен': 'активний', 'заблокирован': 'заблоковано',
   'подбор пароля — пауза 15 мин': 'підбір пароля — пауза 15 хв', 'ещё не входил': 'ще не входив',
   'Снять паузу': 'Зняти паузу', 'По умолчанию': 'За замовчуванням', 'Выйти везде': 'Вийти всюди',
-  'Заблокировать': 'Заблокувати', 'Разблокировать': 'Розблокувати', '🔔 Проверить push': '🔔 Перевірити push',
+  'Заблокировать': 'Заблокувати', 'Разблокировать': 'Розблокувати', 'Проверить push': 'Перевірити push',
   'Пробное уведомление только этому фотографу': 'Пробне сповіщення лише цьому фотографу',
   'Фотограф по умолчанию: подставляется в новые задания': 'Фотограф за замовчуванням: підставляється в нові завдання',
   'Новый пользователь': 'Новий користувач', 'латиница, например melnik': 'латиниця, наприклад melnik', 'Временный пароль': 'Тимчасовий пароль',
@@ -450,7 +450,25 @@ const I18N_UK = {
   'Нечего выгружать': 'Нема чого вивантажувати', 'Собираю архив…': 'Збираю архів…', 'Готово': 'Готово', 'Не загрузилась библиотека архива': 'Не завантажилася бібліотека архіву',
   'в 1С': 'в 1С', 'главное': 'головне', 'Сделать главным': 'Зробити головним', 'Для 1С фото не выбраны': 'Для 1С фото не обрано',
   'Как по умолчанию': 'Як за замовчуванням', 'Какие фото уходят в 1С и какое главное — в карточке товара: под каждым фото «в 1С» и «Сделать главным». По умолчанию — все, кроме этикетки.': 'Які фото йдуть в 1С і яке головне — у картці товару: під кожним фото «в 1С» і «Зробити головним». За замовчуванням — усі, крім етикетки.', 'В 1С нужен настоящий код, а не временный NEW-…. Впишите его:': 'В 1С потрібен справжній код, а не тимчасовий NEW-…. Впишіть його:', 'Оставьте хотя бы одно фото для 1С': 'Залиште хоча б одне фото для 1С', 'Светлая тема': 'Світла тема', 'Тёмная тема': 'Темна тема', 'есть в тексте': 'є в тексті', 'Нет снятых товаров из заданий Excel': 'Немає знятих товарів із завдань Excel', 'Нет данных': 'Немає даних', 'Связка кода создана': 'Зв’язку коду створено', 'Связка кода изменена': 'Зв’язку коду змінено',
-  'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код'
+  'Связка кода удалена': 'Зв’язку коду видалено', 'Сканер не нашёл код': 'Сканер не знайшов код',
+  // ── каталог сайта (a15) ──
+  'Каталог сайта': 'Каталог сайту',
+  'Товары, штрихкоды и фото с сайта k-h.com.ua. Обновляется сам каждую ночь в 03:00': 'Товари, штрихкоди й фото із сайту k-h.com.ua. Оновлюється сам щоночі о 03:00',
+  'Загрузить сейчас': 'Завантажити зараз', 'Загрузка запущена': 'Завантаження запущено',
+  'Идёт загрузка с сайта': 'Триває завантаження із сайту',
+  'Обычно около 10 минут. Можно уйти со страницы — загрузка продолжится.': 'Зазвичай близько 10 хвилин. Можна піти зі сторінки — завантаження продовжиться.',
+  'Скачиваю каталог с сайта…': 'Завантажую каталог із сайту…', 'Записываю в базу…': 'Записую в базу…',
+  'Каталог ещё не загружен. Нажмите «Загрузить сейчас» — около 10 минут.': 'Каталог ще не завантажено. Натисніть «Завантажити зараз» — близько 10 хвилин.',
+  'Последняя успешная загрузка:': 'Останнє успішне завантаження:',
+  'Товаров': 'Товарів', 'С фото': 'З фото', 'Без фото': 'Без фото', 'Служебные без фото': 'Службові без фото',
+  'Без штрихкода': 'Без штрихкоду', 'Брендов': 'Брендів', 'Фото на сайте': 'Фото на сайті',
+  'Последние загрузки': 'Останні завантаження', 'Начало': 'Початок', 'Кто': 'Хто', 'Длилась': 'Тривало',
+  'Страниц': 'Сторінок', 'Удалено': 'Видалено', 'Статус': 'Статус', 'Примечание': 'Примітка',
+  'ночью, авто': 'вночі, авто', 'готово': 'готово', 'ошибка': 'помилка', 'идёт': 'триває',
+  'Загрузка уже идёт': 'Завантаження вже триває', 'Прервана: нет ответа больше 40 минут': 'Перервано: немає відповіді понад 40 хвилин',
+  'Каталог получен не полностью — пропавшие товары не удалялись': 'Каталог отримано не повністю — зниклі товари не видалялися',
+  'Воркфлоу «каталог сайта» не установлен или не опубликован в n8n': 'Воркфлоу «каталог сайту» не встановлено або не опубліковано в n8n',
+  'Без фото — без служебных позиций («_Акція…», материалы цеха).': 'Без фото — без службових позицій («_Акція…», матеріали цеху).'
 };
 
 // Правила для надписей с числами и именами. pl(n, 1, 2–4, 5+) — украинское склонение.
@@ -473,6 +491,11 @@ const I18N_RX = [
   [/^Фото меньше (\d+) — укажите причину в комментарии$/, m => `Фото менше ${m[1]} — вкажіть причину в коментарі`],
   [/^минимум (\d+), максимум (\d+)$/, m => `мінімум ${m[1]}, максимум ${m[2]}`],
   [/^Все (\d+)$/, m => `Усі ${m[1]}`],
+  [/^(\d+) мин (\d+) с$/, m => `${m[1]} хв ${m[2]} с`],
+  [/^(\d+) с$/, m => `${m[1]} с`],
+  [/^записано страниц: (\d+), товаров: (\d+)$/, m => `записано сторінок: ${m[1]}, товарів: ${m[2]}`],
+  [/^Записано страниц: (\d+) из (\d+)$/, m => `Записано сторінок: ${m[1]} з ${m[2]}`],
+  [/^Пришло подозрительно мало товаров \((\d+)\) — пропавшие товары не удалялись$/, m => `Надійшло підозріло мало товарів (${m[1]}) — зниклі товари не видалялися`],
   [/^Не сняты (\d+)$/, m => `Не знято ${m[1]}`],
   [/^Сняты (\d+)$/, m => `Знято ${m[1]}`],
   [/^С замечаниями (\d+)$/, m => `Із зауваженнями ${m[1]}`],
@@ -645,7 +668,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a13';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a15';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -737,6 +760,7 @@ const routes = [
   [/^#users$/, () => Auth.isAdmin() ? viewUsers() : (location.hash = '#tasks')],
   [/^#links$/, () => viewLinks()],
   [/^#label-test$/, () => Auth.isAdmin() ? viewLabelTest() : (location.hash = '#tasks')],
+  [/^#catalog$/, () => Auth.isAdmin() ? viewCatalog() : (location.hash = '#tasks')],
   [/^#intake-(\d+)$/, m => viewIntake(m[1])],
   [/^#find=(.*)$/, m => viewFind(decodeURIComponent(m[1]))],
   [/^#audit(?:-(\d+))?$/, m => Auth.isAdmin() ? viewAudit(m[1]) : (location.hash = '#tasks')]
@@ -1236,6 +1260,7 @@ const expPart = v => String(v || '').trim().replace(/[\s\/\\.]+/g, '').replace(/
 const expName = (it, n) => `nw_${expPart(it.brand)}_${expPart(it.article)}_${n}.jpg`;
 const expSrc = (u, v) => cld(v === 'web' ? webUrl(u) : v === 'light' ? lightUrl(u) : u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
 const expSrcOrig = u => cld(u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
+window.addEventListener('hashchange', () => document.querySelectorAll('.xov').forEach(x => x.remove()));   // окно выгрузки не остаётся поверх другого экрана
 async function openExport(taskId) {
   const d = await loadTask(taskId), cfg = await loadExpCfg(taskId, true);
   let ver = {};
@@ -1506,6 +1531,7 @@ function drawWho() {
   $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(ROLE_RU[u.role] || u.role) : '';
   $('#nav-users').hidden = !Auth.isAdmin();
   $('#nav-audit').hidden = !Auth.isAdmin();
+  $('#nav-catalog').hidden = !Auth.isAdmin();
 }
 function showLogin(msg) {
   document.body.classList.add('need-auth');
@@ -1671,7 +1697,7 @@ async function viewUsers() {
     acts.push(`<button class="btn sm" data-u="reset" data-id="${u.id}">Пароль</button>`);
     if (u.locked) acts.push(`<button class="btn sm" data-u="unlock" data-id="${u.id}">Снять паузу</button>`);
     if (u.role === 'photographer' && u.is_active && u.id !== defaultId) acts.push(`<button class="btn sm" data-u="default" data-id="${u.id}">По умолчанию</button>`);
-    if (u.role === 'photographer' && u.is_active) acts.push(`<button class="btn sm" data-u="push" data-id="${u.id}" title="Пробное уведомление только этому фотографу">🔔 Проверить push</button>`);
+    if (u.role === 'photographer' && u.is_active) acts.push(`<button class="btn sm" data-u="push" data-id="${u.id}" title="Пробное уведомление только этому фотографу"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span>Проверить push</span></button>`);
     if (num(u.sessions) && !self) acts.push(`<button class="btn sm" data-u="logout_all" data-id="${u.id}">Выйти везде</button>`);
     if (!self) acts.push(u.is_active ? `<button class="btn sm" data-u="block" data-id="${u.id}">Заблокировать</button>` : `<button class="btn sm" data-u="unblock" data-id="${u.id}">Разблокировать</button>`);
     const seen = u.role === 'photographer'
@@ -2030,6 +2056,65 @@ async function viewLabelTest() {
         <td>${yn(r.article_ok)}${!r.article_ok && r.article_in_text ? '<div class="mu">есть в тексте</div>' : ''}</td><td>${yn(r.brand_ok)}</td></tr>`).join('')}
       </tbody></table></div>`;
   };
+}
+
+// ─── Каталог сайта k-h.com.ua (воркфлоу 9): статус, ручная загрузка ─────
+// Загрузка идёт в n8n ~10 минут; страница опрашивает статус, пока идёт загрузка.
+let catalogReq = 0;
+const fmtInt = v => num(v).toLocaleString('ru-RU');
+const fmtDur = s => { s = num(s); return s >= 60 ? Math.floor(s / 60) + ' мин ' + (s % 60) + ' с' : s + ' с'; };
+function catalogErr(e) { return e && e.status === 404 ? 'Воркфлоу «каталог сайта» не установлен или не опубликован в n8n' : (e.message || String(e)); }
+async function viewCatalog() {
+  navOn('catalog');
+  const req = ++catalogReq;
+  view.innerHTML = `<div class="hd"><div><h1>Каталог сайта</h1><div class="sub">Товары, штрихкоды и фото с сайта k-h.com.ua. Обновляется сам каждую ночь в 03:00</div></div>
+      <div class="bar"><button class="btn" type="button" id="c-refresh">Обновить</button><button class="btn pri" type="button" id="c-sync">Загрузить сейчас</button></div></div>
+    <div id="c-body"><div class="loading">Загрузка…</div></div>`;
+  $('#c-refresh').onclick = () => drawCatalog(req);
+  $('#c-sync').onclick = async () => {
+    const b = $('#c-sync'); b.disabled = true;
+    try { await api('/photo/admin/catalog-sync', { method: 'POST', body: {} }); toast('Загрузка запущена'); }
+    catch (e) { toast(catalogErr(e)); }
+    drawCatalog(req);
+  };
+  drawCatalog(req);
+}
+async function drawCatalog(req) {
+  clearTimeout(drawCatalog._t);
+  if (req !== catalogReq || location.hash !== '#catalog') return;
+  const box = $('#c-body'); if (!box) return;
+  let d;
+  try { d = await api('/photo/admin/catalog-status'); }
+  catch (e) { if (req === catalogReq) { box.innerHTML = '<div class="err">' + esc(catalogErr(e)) + '</div>'; $('#c-sync').disabled = false; } return; }
+  if (req !== catalogReq || location.hash !== '#catalog') return;
+  const s = d.stats || {}, runs = d.runs || [], cur = d.running ? runs.find(r => r.status === 'running') : null;
+  $('#c-sync').disabled = !!d.running;
+  const runState = r => r.status === 'ok' ? '<span class="pill ok">готово</span>' : r.status === 'error' ? '<span class="pill er">ошибка</span>' : '<span class="pill bl">идёт</span>';
+  const runWho = r => r.trigger === 'schedule' ? '<span>ночью, авто</span>' : `<span data-noi18n>${esc(r.started_by || '—')}</span>`;
+  const runNote = r => r.error || r.note ? `<span class="${r.error ? 'err' : 'mu'}" style="padding:0;background:none;border:0">${esc(r.error || r.note)}</span>` : '';
+  box.innerHTML = `
+    ${cur ? `<div class="card" style="margin-bottom:14px"><b>Идёт загрузка с сайта</b>
+        <div class="mu">${cur.pages ? 'Записываю в базу…' : 'Скачиваю каталог с сайта…'}</div>
+        ${cur.pages ? `<div class="mu">${esc('записано страниц: ' + num(cur.pages) + ', товаров: ' + num(cur.products))}</div>` : ''}
+        <div class="mu">Обычно около 10 минут. Можно уйти со страницы — загрузка продолжится.</div></div>` : ''}
+    ${num(s.total) ? `<div class="kpi">
+        <div><span>Товаров</span><b data-noi18n>${fmtInt(s.total)}</b></div>
+        <div class="ok"><span>С фото</span><b data-noi18n>${fmtInt(s.with_photo)}</b></div>
+        <div class="wa"><span>Без фото</span><b data-noi18n>${fmtInt(s.no_photo)}</b></div>
+        <div><span>Служебные без фото</span><b data-noi18n>${fmtInt(s.no_photo_service)}</b></div>
+        <div><span>Без штрихкода</span><b data-noi18n>${fmtInt(s.no_barcode)}</b></div>
+        <div><span>Брендов</span><b data-noi18n>${fmtInt(s.brands)}</b></div>
+        <div><span>Фото на сайте</span><b data-noi18n>${fmtInt(s.photos)}</b></div></div>
+      <div class="mu" style="margin:-4px 0 14px">Без фото — без служебных позиций («_Акція…», материалы цеха).</div>
+      ${d.last_ok ? `<div class="mu" style="margin-bottom:14px"><span>Последняя успешная загрузка:</span> <b data-noi18n>${esc(fmtDate(d.last_ok))}</b></div>` : ''}`
+    : (cur ? '' : '<div class="card empty">Каталог ещё не загружен. Нажмите «Загрузить сейчас» — около 10 минут.</div>')}
+    ${runs.length ? `<h2 style="font-size:16px;margin:6px 0 8px">Последние загрузки</h2>
+      <div class="tw"><table><thead><tr><th>Начало</th><th>Кто</th><th>Длилась</th><th>Страниц</th><th>Товаров</th><th>Удалено</th><th>Статус</th><th>Примечание</th></tr></thead><tbody>
+      ${runs.map(r => `<tr><td data-noi18n>${esc(fmtDate(r.started_at))}</td><td>${runWho(r)}</td><td>${esc(fmtDur(r.seconds))}</td>
+        <td data-noi18n>${fmtInt(r.pages)}</td><td data-noi18n>${fmtInt(r.products)}</td><td data-noi18n>${fmtInt(r.removed)}</td>
+        <td>${runState(r)}</td><td>${runNote(r)}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}`;
+  if (d.running) drawCatalog._t = setTimeout(() => drawCatalog(req), 10000);
 }
 
 // ─── Связки кодов: «код на коробке → товар» ───────────────
