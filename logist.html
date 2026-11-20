@@ -232,6 +232,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
     <a href="#fix" data-nav="fix"></a>
     <a href="#stats" data-nav="stats"></a>
     <a href="#help" data-nav="help"></a>
+    <a href="#data1c" data-nav="data1c" id="nav-data1c" hidden></a>
     <a href="#users" data-nav="users" id="nav-users" hidden></a>
     <div class="ver" id="ver"></div>
   </nav>
@@ -242,7 +243,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm5';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm6';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -284,7 +285,7 @@ const TI = (o, f) => lang === 'uk' && o[f + '_uk'] ? o[f + '_uk'] : o[f];   // �
 const lswHtml = () => `<span class="lsw"><button type="button" data-lang="uk" class="${lang === 'uk' ? 'on' : ''}">UA</button><button type="button" data-lang="ru" class="${lang === 'ru' ? 'on' : ''}">RU</button></span>`;
 function drawChrome() {
   const N = { check: T('Проверка листов', 'Перевірка листів'), fix: T('Исправить адрес в 1С', 'Виправити адресу в 1С'), stats: T('Итоги пилота', 'Підсумки пілоту'),
-    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі') };
+    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С') };
   $$('.side a[data-nav]').forEach(a => { a.textContent = N[a.dataset.nav]; });
   $('.side').setAttribute('aria-label', T('Разделы', 'Розділи'));
   $('#logout').textContent = T('Выйти', 'Вийти');
@@ -306,8 +307,11 @@ const SRV_UK = { 'Нужно войти': 'Потрібно увійти', 'Вх
   'Логин: 3–32 символа, латиница, цифры, точка, дефис': 'Логін: 3–32 символи, латиниця, цифри, крапка, дефіс', 'Укажите имя': 'Вкажіть імʼя',
   'Неизвестная роль': 'Невідома роль', 'Пароль — не меньше 6 символов': 'Пароль — щонайменше 6 символів', 'Такой логин уже есть': 'Такий логін уже є',
   'Себя заблокировать нельзя': 'Себе заблокувати не можна', 'Неизвестное действие': 'Невідома дія', 'Не указан день': 'Не вказано день', 'Не указан клиент': 'Не вказано клієнта', 'Нет замечания': 'Немає зауваження',
-  'В файле не найдено ни одного маршрутного листа': 'У файлі не знайдено жодного маршрутного листа', 'Пустой ответ базы': 'Порожня відповідь бази' };
-const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
+  'В файле не найдено ни одного маршрутного листа': 'У файлі не знайдено жодного маршрутного листа', 'Пустой ответ базы': 'Порожня відповідь бази',
+  'Загрузка уже идёт, подождите': 'Завантаження вже триває, зачекайте', 'Лимит 1С: не чаще раза в минуту. Попробуйте через минуту': 'Ліміт 1С: не частіше разу на хвилину. Спробуйте за хвилину',
+  'Лимит 1С: не больше 3 загрузок в час. Попробуйте позже': 'Ліміт 1С: не більше 3 завантажень на годину. Спробуйте пізніше',
+  'Лимит 1С на сутки почти исчерпан. Попробуйте завтра': 'Ліміт 1С на добу майже вичерпано. Спробуйте завтра', 'В ответе 1С нет клиентов': 'У відповіді 1С немає клієнтів' };
+const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Ошибка 1С: /, 'Помилка 1С: ').replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
 
 // ─── API и вход ───────────────────────────────────────────
 const AUTH_KEY = 'zm_token', USER_KEY = 'zm_user', LAST_KEY = 'zm_last';
@@ -395,6 +399,7 @@ function drawWho() {
   const u = Auth.user;
   $('#who').innerHTML = u ? '<b>' + esc(u.full_name) + '</b> · ' + esc(roleName(u.role)) : '';
   $('#nav-users').hidden = !Auth.isAdmin();
+  $('#nav-data1c').hidden = !Auth.isAdmin();
 }
 function showLogin(msg) {
   document.body.classList.add('need-auth');
@@ -469,10 +474,10 @@ $('#logout').onclick = async () => {
 // ─── разделы ──────────────────────────────────────────────
 function route() {
   let r = (location.hash || '#check').slice(1);
-  if (r === 'users' && !Auth.isAdmin()) r = 'check';
+  if ((r === 'users' || r === 'data1c') && !Auth.isAdmin()) r = 'check';
   $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
   if (r !== 'check') Geo.pause = true;
-  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp }[r] || viewCheck)();
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c }[r] || viewCheck)();
 }
 window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 
@@ -1169,6 +1174,44 @@ function viewHelp() {
     <li>Сторінка не відкривається або не перевіряє файл — напишіть менеджеру проєкту.</li></ul>
   </div>`;
   $('#view').innerHTML = T(ru, uk);
+}
+
+// ═══ Данные 1С (только администратор) ═════════════════════
+let syncBusy = false;
+async function viewData1c() {
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Данные 1С', 'Дані 1С')}</h1><div class="sub">${T('Клиенты из 1С (метод GetListOfClients). Загружаются сами каждую ночь в 03:15; при необходимости — кнопкой. Лимит 1С: не чаще раза в минуту, 3 раза в час, 20 в сутки.', 'Клієнти з 1С (метод GetListOfClients). Завантажуються самі щоночі о 03:15; за потреби — кнопкою. Ліміт 1С: не частіше разу на хвилину, 3 рази на годину, 20 на добу.')}</div></div>
+    <div class="bar"><button class="btn pri" type="button" id="sync-go" ${syncBusy ? 'disabled' : ''}>${syncBusy ? T('Загружаю из 1С…', 'Завантажую з 1С…') : T('Загрузить сейчас', 'Завантажити зараз')}</button></div></div>
+    <div id="d1-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
+  $('#sync-go').onclick = async () => {
+    if (!await ask({ title: T('Загрузить клиентов из 1С сейчас?', 'Завантажити клієнтів з 1С зараз?'), ok: T('Загрузить', 'Завантажити'),
+      text: T('Займёт до пары минут. Это один из 20 разрешённых запросов к 1С в сутки — без нужды лучше дождаться ночной загрузки.', 'Займе до кількох хвилин. Це один із 20 дозволених запитів до 1С на добу — без потреби краще дочекатися нічного завантаження.') })) return;
+    syncBusy = true; viewData1c();
+    try { const r = await api('/logist/admin/clients-sync', { method: 'POST' }); toast(T(`Готово: ${r.total} клиентов, новых ${r.added}, изменилось ${r.changed}`, `Готово: ${r.total} клієнтів, нових ${r.added}, змінилося ${r.changed}`)); }
+    catch (e) { toast(e.message); }
+    syncBusy = false; if ((location.hash || '').slice(1) === 'data1c') viewData1c();
+  };
+  try {
+    const d = await api('/logist/admin/clients');
+    const lo = d.last_ok, dur = x => x.finished_at ? Math.max(1, Math.round((new Date(x.finished_at) - new Date(x.started_at)) / 1000)) + T(' с', ' с') : '—';
+    const SRC = { schedule: T('ночью', 'вночі'), manual: T('вручную', 'вручну') };
+    const ST = { ok: `<span class="pill ok">${T('успешно', 'успішно')}</span>`, error: `<span class="pill er">${T('ошибка', 'помилка')}</span>`, running: `<span class="pill">${T('идёт', 'триває')}</span>` };
+    const fields = lo && lo.fields ? Object.entries(lo.fields).sort((a, b) => b[1].filled - a[1].filled) : [];
+    const pct = n => d.clients ? Math.round(n / (lo.total || d.clients) * 100) : 0;
+    $('#d1-res').innerHTML = `<div class="kpi"><div><b>${d.clients}</b>${T('клиентов в базе', 'клієнтів у базі')}</div>
+      <div><b>${lo ? fmtDT(lo.finished_at) : '—'}</b>${T('последняя загрузка', 'останнє завантаження')}${lo ? ' · ' + SRC[lo.source] : ''}</div>
+      <div><b>${lo ? '+' + lo.added + ' / ' + lo.changed : '—'}</b>${T('новых / изменилось', 'нових / змінилося')}</div>
+      <div><b>${d.calls_hour}/3 · ${d.calls_day}/20</b>${T('запросов к 1С: за час · за сутки', 'запитів до 1С: за годину · за добу')}</div></div>
+      ${d.running ? `<div class="note">${T('Загрузка идёт…', 'Завантаження триває…')}</div>` : ''}
+      <div class="panel"><h2>${T('Какие поля приходят из 1С', 'Які поля приходять з 1С')}</h2>
+      ${fields.length ? `<div class="tw"><table><thead><tr><th>${T('Поле', 'Поле')}</th><th>${T('Заполнено', 'Заповнено')}</th><th>${T('Пример', 'Приклад')}</th></tr></thead><tbody>
+        ${fields.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="nw">${v.filled} <span class="mu">(${pct(v.filled)}%)</span></td><td class="small">${esc(String(v.sample || '—').replace(/^"|"$/g, ''))}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="mu">${T('Загрузок ещё не было', 'Завантажень ще не було')}</div>`}</div>
+      <div class="panel"><h2>${T('История загрузок', 'Історія завантажень')}</h2>
+      ${d.log.length ? `<div class="tw"><table><thead><tr><th>${T('Начало', 'Початок')}</th><th>${T('Как', 'Як')}</th><th>${T('Итог', 'Підсумок')}</th><th>${T('Клиентов', 'Клієнтів')}</th><th>${T('Новых / изм.', 'Нових / змін.')}</th><th>${T('Длилась', 'Тривало')}</th><th>${T('Ошибка', 'Помилка')}</th></tr></thead><tbody>
+        ${d.log.map(x => `<tr><td class="nw">${fmtDT(x.started_at)}</td><td>${SRC[x.source] || esc(x.source)}${x.who ? ' · ' + esc(x.who) : ''}</td><td>${ST[x.status] || esc(x.status)}</td>
+          <td>${x.total ?? '—'}</td><td>${x.total !== null && x.total !== undefined ? '+' + x.added + ' / ' + x.changed : '—'}</td><td>${dur(x)}</td><td class="small">${esc(trSrv(x.error) || '')}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="mu">${T('Пусто', 'Порожньо')}</div>`}</div>`;
+  } catch (e) { $('#d1-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
 }
 
 // ═══ Пользователи (только администратор) ═════════════════
