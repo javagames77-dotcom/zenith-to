@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>try { if (localStorage.getItem('zm_theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (_) {}</script>
 <style>
 
@@ -231,6 +232,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
     <a href="#check" data-nav="check"></a>
     <a href="#fix" data-nav="fix"></a>
     <a href="#stats" data-nav="stats"></a>
+    <a href="#zones" data-nav="zones"></a>
     <a href="#help" data-nav="help"></a>
     <a href="#data1c" data-nav="data1c" id="nav-data1c" hidden></a>
     <a href="#users" data-nav="users" id="nav-users" hidden></a>
@@ -243,7 +245,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm6';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm7';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -285,7 +287,7 @@ const TI = (o, f) => lang === 'uk' && o[f + '_uk'] ? o[f + '_uk'] : o[f];   // �
 const lswHtml = () => `<span class="lsw"><button type="button" data-lang="uk" class="${lang === 'uk' ? 'on' : ''}">UA</button><button type="button" data-lang="ru" class="${lang === 'ru' ? 'on' : ''}">RU</button></span>`;
 function drawChrome() {
   const N = { check: T('Проверка листов', 'Перевірка листів'), fix: T('Исправить адрес в 1С', 'Виправити адресу в 1С'), stats: T('Итоги пилота', 'Підсумки пілоту'),
-    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С') };
+    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С'), zones: T('Карты зон', 'Карти зон') };
   $$('.side a[data-nav]').forEach(a => { a.textContent = N[a.dataset.nav]; });
   $('.side').setAttribute('aria-label', T('Разделы', 'Розділи'));
   $('#logout').textContent = T('Выйти', 'Вийти');
@@ -310,7 +312,8 @@ const SRV_UK = { 'Нужно войти': 'Потрібно увійти', 'Вх
   'В файле не найдено ни одного маршрутного листа': 'У файлі не знайдено жодного маршрутного листа', 'Пустой ответ базы': 'Порожня відповідь бази',
   'Загрузка уже идёт, подождите': 'Завантаження вже триває, зачекайте', 'Лимит 1С: не чаще раза в минуту. Попробуйте через минуту': 'Ліміт 1С: не частіше разу на хвилину. Спробуйте за хвилину',
   'Лимит 1С: не больше 3 загрузок в час. Попробуйте позже': 'Ліміт 1С: не більше 3 завантажень на годину. Спробуйте пізніше',
-  'Лимит 1С на сутки почти исчерпан. Попробуйте завтра': 'Ліміт 1С на добу майже вичерпано. Спробуйте завтра', 'В ответе 1С нет клиентов': 'У відповіді 1С немає клієнтів' };
+  'Лимит 1С на сутки почти исчерпан. Попробуйте завтра': 'Ліміт 1С на добу майже вичерпано. Спробуйте завтра', 'В ответе 1С нет клиентов': 'У відповіді 1С немає клієнтів',
+  'Не выбрано: будни или суббота': 'Не вибрано: будні чи субота', 'В файле нет зон (многоугольников)': 'У файлі немає зон (багатокутників)', 'Карта не найдена': 'Карту не знайдено' };
 const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Ошибка 1С: /, 'Помилка 1С: ').replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
 
 // ─── API и вход ───────────────────────────────────────────
@@ -477,7 +480,7 @@ function route() {
   if ((r === 'users' || r === 'data1c') && !Auth.isAdmin()) r = 'check';
   $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
   if (r !== 'check') Geo.pause = true;
-  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c }[r] || viewCheck)();
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c, zones: viewZones }[r] || viewCheck)();
 }
 window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 
@@ -1134,6 +1137,7 @@ function viewHelp() {
       <li>Если адрес не найден или стоит не там — нажмите <b>«Поставить на карте»</b> и кликните нужное место. Помощник запомнит точку.</li>
       <li>Линия — <b>примерный</b> объезд от склада и обратно, с номерами остановок при выборе листа. Это подсказка, а не задание водителю.</li>
       <li>Нажмите на строку накладной — карта покажет её точку.</li>
+      <li>Изменили зоны в Google My Maps — выгрузите карту в KMZ и загрузите в разделе «Карты зон» (будни или суббота). Новая карта действует сразу, прежнюю можно вернуть.</li>
     </ul>
     <h2>Если что-то не так</h2>
     <ul><li>Ошибка неверная — отметьте «Ложная тревога» и напишите в комментарии почему: по этим отметкам правим правила.</li>
@@ -1168,6 +1172,7 @@ function viewHelp() {
       <li>Якщо адресу не знайдено або вона стоїть не там — натисніть <b>«Поставити на карті»</b> і клацніть потрібне місце. Помічник запамʼятає точку.</li>
       <li>Лінія — <b>приблизний</b> обʼїзд від складу й назад, з номерами зупинок, коли вибрано лист. Це підказка, а не завдання водієві.</li>
       <li>Натисніть на рядок накладної — карта покаже її точку.</li>
+      <li>Змінили зони в Google My Maps — вивантажте карту в KMZ і завантажте в розділі «Карти зон» (будні або субота). Нова карта діє одразу, попередню можна повернути.</li>
     </ul>
     <h2>Якщо щось не так</h2>
     <ul><li>Помилка невірна — позначте «Хибна тривога» й напишіть у коментарі чому: за цими позначками правимо правила.</li>
@@ -1176,12 +1181,132 @@ function viewHelp() {
   $('#view').innerHTML = T(ru, uk);
 }
 
+// ═══ Карты зон (загружает логист: KMZ/KML из Google My Maps) ═══
+let zPrev = null, zMap = null;
+function parseKml(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  const zones = [], points = {};
+  const coords = el => (el ? el.textContent.trim().split(/\s+/) : []).map(t => t.split(',').map(Number)).filter(c => c.length >= 2 && isFinite(c[0]) && isFinite(c[1])).map(c => [Math.round(c[1] * 1e5) / 1e5, Math.round(c[0] * 1e5) / 1e5]);
+  for (const pm of Array.from(doc.getElementsByTagName('Placemark'))) {
+    const nm = (pm.getElementsByTagName('name')[0] || {}).textContent;
+    const name = String(nm || '').trim();
+    for (const pg of Array.from(pm.getElementsByTagName('Polygon'))) {
+      const ob = pg.getElementsByTagName('outerBoundaryIs')[0];
+      const c = coords(ob && ob.getElementsByTagName('coordinates')[0]);
+      if (c.length >= 3) zones.push([name, c]);
+    }
+    const pt = pm.getElementsByTagName('Point')[0];
+    if (pt) { const c = coords(pt.getElementsByTagName('coordinates')[0]); if (c.length) points[name] = c[0]; }
+  }
+  return { zones, points };
+}
+async function readZoneFile(f) {
+  if (/\.kmz$/i.test(f.name)) {
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const k = Object.keys(zip.files).find(n => /\.kml$/i.test(n));
+    if (!k) throw new Error(T('В KMZ нет файла KML', 'У KMZ немає файлу KML'));
+    return parseKml(await zip.files[k].async('string'));
+  }
+  return parseKml(await f.text());
+}
+const SETN = () => ({ budni: T('Будни', 'Будні'), subbota: T('Суббота', 'Субота') });
+async function viewZones(d) {
+  if (!d) {
+    $('#view').innerHTML = `<div class="hd"><div><h1>${T('Карты зон', 'Карти зон')}</h1><div class="sub">${T('Зоны городских маршрутов Харькова. Изменили карту в Google My Maps — выгрузите её в KMZ («Экспорт в KML/KMZ») и загрузите сюда. Название зоны = маршрут листа без времени, например Хк(Л)-0-11.', 'Зони міських маршрутів Харкова. Змінили карту в Google My Maps — вивантажте її в KMZ («Експорт у KML/KMZ») і завантажте сюди. Назва зони = маршрут листа без часу, наприклад Хк(Л)-0-11.')}</div></div></div>
+      <div id="z-cur"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>
+      <label class="drop" id="z-drop"><input type="file" id="z-file" accept=".kmz,.kml" hidden><b>${T('Перетащите KMZ или KML с картой зон', 'Перетягніть KMZ або KML з картою зон')}</b><span class="mu">${T('или нажмите, чтобы выбрать файл', 'або натисніть, щоб вибрати файл')}</span></label>
+      <div id="z-prev"></div><div id="z-hist"></div>`;
+    const drop = $('#z-drop');
+    $('#z-file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) zoneFile(f); };
+    ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) zoneFile(f); });
+    try { d = await api('/logist/zones', { method: 'POST', body: { action: 'list' } }); } catch (e) { $('#z-cur').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return; }
+  }
+  const cur = d.current || {}, H = d.history || [], SN = SETN();
+  const curRow = st => { const h = H.find(x => x.set === st && x.active);
+    return `<div><b>${SN[st]}</b>${h ? `${esc(h.file || '')} · ${h.zones} ${T('зон', 'зон')} · ${esc(h.who || '')}, ${fmtDT(h.at)}` : (st === 'budni' ? T('встроенная карта 16.06.2026', 'вбудована карта 16.06.2026') : T('встроенная карта 2023 — не подтверждена', 'вбудована карта 2023 — не підтверджена'))}</div>`; };
+  $('#z-cur').innerHTML = `<div class="kpi" style="grid-template-columns:repeat(2,1fr)">${curRow('budni')}${curRow('subbota')}</div>`;
+  $('#z-hist').innerHTML = H.length ? `<div class="panel mt"><h2>${T('История загрузок', 'Історія завантажень')}</h2><div class="tw"><table><thead><tr><th>${T('Когда', 'Коли')}</th><th>${T('Карта', 'Карта')}</th><th>${T('Файл', 'Файл')}</th><th>${T('Зон', 'Зон')}</th><th>${T('Кто', 'Хто')}</th><th></th></tr></thead><tbody>
+    ${H.map(h => `<tr><td class="nw">${fmtDT(h.at)}</td><td>${SN[h.set]}</td><td>${esc(h.file || '')}<div class="mu small">${esc((h.names || []).join(', '))}</div></td><td>${h.zones}</td><td>${esc(h.who || '')}</td>
+      <td>${h.active ? `<span class="pill ok">${T('действует', 'діє')}</span>` : `<button class="btn sm" type="button" data-zact="${h.id}">${T('Вернуть эту', 'Повернути цю')}</button>`}</td></tr>`).join('')}
+    </tbody></table></div></div>` : '';
+  $('#z-hist').onclick = async e => {
+    const b = e.target.closest('[data-zact]'); if (!b) return;
+    if (!await ask({ title: T('Вернуть эту карту зон?', 'Повернути цю карту зон?'), text: T('Она снова станет действующей, текущая уйдёт в историю.', 'Вона знову стане чинною, поточна піде в історію.'), ok: T('Вернуть', 'Повернути') })) return;
+    try { const r = await api('/logist/zones', { method: 'POST', body: { action: 'activate', id: b.dataset.zact } }); applyZones(r.current); toast(T('Карта возвращена', 'Карту повернуто')); viewZones(r); }
+    catch (ex) { toast(ex.message); }
+  };
+}
+function applyZones(cur) {      // новые зоны сразу действуют и в открытом отчёте
+  if (!R || !cur) return;
+  R.zones = R.zones || {};
+  if (cur.budni) R.zones.budni = cur.budni;
+  if (cur.subbota) { R.zones.subbota = cur.subbota; R.report.saturdayZonesConfirmed = true; }
+  saveLast();
+}
+async function zoneFile(f) {
+  let z;
+  try { z = await readZoneFile(f); } catch (e) { $('#z-prev').innerHTML = '<div class="err">' + T('Не удалось прочитать файл: ', 'Не вдалося прочитати файл: ') + esc(e.message) + '</div>'; return; }
+  if (!z.zones.length) { $('#z-prev').innerHTML = '<div class="err">' + T('В файле нет зон (многоугольников)', 'У файлі немає зон (багатокутників)') + '</div>'; return; }
+  zPrev = { ...z, file: f.name };
+  const names = [...new Set(z.zones.map(x => x[0]))];
+  const odd = names.filter(n => !/^Хк(\(Л\))?-\d/.test(n));
+  const guess = /суб|sub|сб|sat/i.test(f.name) ? 'subbota' : 'budni', SN = SETN();
+  const used = R ? [...new Set(R.report.sheets.filter(s => s.type === 'city').map(s => s.code))] : [];
+  const missing = used.filter(c => !names.includes(c) && (guess === 'subbota') === isSat(c));
+  $('#z-prev').innerHTML = `<div class="panel mt"><h2>${T('Проверьте карту перед сохранением', 'Перевірте карту перед збереженням')}</h2>
+    <p>${esc(f.name)}: <b>${z.zones.length}</b> ${T('зон', 'зон')}${Object.keys(z.points).length ? `, ${T('точек', 'точок')}: ${Object.keys(z.points).length}` : ''}</p>
+    <div class="mapbox"><div id="zmap" style="height:420px"></div></div>
+    <p class="small">${T('Зоны', 'Зони')}: ${names.map(esc).join(', ')}</p>
+    ${odd.length ? `<div class="note">${T('Эти названия не похожи на маршрут (Хк-…, Хк(Л)-…) — по ним проверки не будет', 'Ці назви не схожі на маршрут (Хк-…, Хк(Л)-…) — за ними перевірки не буде')}: ${odd.map(esc).join(', ')}</div>` : ''}
+    ${missing.length ? `<div class="note">${T('В последней проверке были маршруты, которых нет на этой карте', 'В останній перевірці були маршрути, яких немає на цій карті')}: ${missing.map(esc).join(', ')}</div>` : ''}
+    <div class="bar mt"><label class="ck-line"><input type="radio" name="zset" value="budni" ${guess === 'budni' ? 'checked' : ''}> ${SN.budni}</label>
+      <label class="ck-line"><input type="radio" name="zset" value="subbota" ${guess === 'subbota' ? 'checked' : ''}> ${SN.subbota}</label>
+      <button class="btn pri" type="button" id="z-save">${T('Сохранить карту зон', 'Зберегти карту зон')}</button><button class="btn" type="button" id="z-cancel">${T('Отмена', 'Скасувати')}</button></div></div>`;
+  if (zMap) { zMap.remove(); zMap = null; }
+  zMap = L.map('zmap');
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }).addTo(zMap);
+  const b = [];
+  z.zones.forEach(([n, c]) => { const col = ZPAL[names.indexOf(n) % ZPAL.length];
+    L.polygon(c, { color: col, weight: 2, fillOpacity: .12 }).addTo(zMap).bindTooltip(n, { permanent: true, direction: 'center', className: 'zl' }); b.push(...c); });
+  for (const [n, c] of Object.entries(z.points)) L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="mk" style="background:#111318"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(zMap).bindPopup(esc(n));
+  zMap.fitBounds(b, { padding: [20, 20] });
+  $('#z-cancel').onclick = () => { zPrev = null; $('#z-prev').innerHTML = ''; };
+  $('#z-save').onclick = async () => {
+    const set = ($$('input[name="zset"]').find(x => x.checked) || {}).value;
+    if (!await ask({ title: T('Сохранить карту зон?', 'Зберегти карту зон?'), ok: T('Сохранить', 'Зберегти'),
+      text: T(`Карта «${SN[set]}» сразу начнёт действовать для проверки листов. Прежняя останется в истории — её можно вернуть.`, `Карта «${SN[set]}» одразу почне діяти для перевірки листів. Попередня залишиться в історії — її можна повернути.`) })) return;
+    try {
+      const r = await api('/logist/zones', { method: 'POST', body: { action: 'save', set, file: zPrev.file, zones: zPrev.zones, points: zPrev.points } });
+      applyZones(r.current); zPrev = null; toast(T('Карта зон сохранена', 'Карту зон збережено')); viewZones();
+    } catch (ex) { toast(ex.message); }
+  };
+}
+
 // ═══ Данные 1С (только администратор) ═════════════════════
 let syncBusy = false;
 async function viewData1c() {
-  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Данные 1С', 'Дані 1С')}</h1><div class="sub">${T('Клиенты из 1С (метод GetListOfClients). Загружаются сами каждую ночь в 03:15; при необходимости — кнопкой. Лимит 1С: не чаще раза в минуту, 3 раза в час, 20 в сутки.', 'Клієнти з 1С (метод GetListOfClients). Завантажуються самі щоночі о 03:15; за потреби — кнопкою. Ліміт 1С: не частіше разу на хвилину, 3 рази на годину, 20 на добу.')}</div></div>
-    <div class="bar"><button class="btn pri" type="button" id="sync-go" ${syncBusy ? 'disabled' : ''}>${syncBusy ? T('Загружаю из 1С…', 'Завантажую з 1С…') : T('Загрузить сейчас', 'Завантажити зараз')}</button></div></div>
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Данные 1С', 'Дані 1С')}</h1><div class="sub">${T('Клиенты из 1С (метод GetListOfClients). Загружаются сами каждую ночь в 03:15; при необходимости — кнопкой или файлом (ответ метода, сохранённый из браузера). Лимит 1С: не чаще раза в минуту, 3 раза в час, 20 в сутки.', 'Клієнти з 1С (метод GetListOfClients). Завантажуються самі щоночі о 03:15; за потреби — кнопкою або файлом (відповідь методу, збережена з браузера). Ліміт 1С: не частіше разу на хвилину, 3 рази на годину, 20 на добу.')}</div></div>
+    <div class="bar"><label class="btn" id="up1c-l"><input type="file" id="up1c" accept=".json,.txt" hidden>${T('Загрузить файл', 'Завантажити файл')}</label><button class="btn pri" type="button" id="sync-go" ${syncBusy ? 'disabled' : ''}>${syncBusy ? T('Загружаю из 1С…', 'Завантажую з 1С…') : T('Загрузить сейчас', 'Завантажити зараз')}</button></div></div>
     <div id="d1-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
+  $('#up1c').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; e.target.value = '';
+    let items = null;
+    try {
+      const d = JSON.parse((await f.text()).replace(/^\uFEFF/, ''));
+      const find = o => { if (items || !o) return; if (Array.isArray(o)) { if (o.length && o[0] && o[0].client_ID !== undefined) items = o; else o.forEach(find); }
+        else if (typeof o === 'object') { if (Array.isArray(o.items)) items = o.items; else Object.values(o).forEach(find); } };
+      find(d);
+    } catch (_) {}
+    if (!items || !items.length) return toast(T('В файле нет клиентов. Нужен ответ GetListOfClients, сохранённый из браузера', 'У файлі немає клієнтів. Потрібна відповідь GetListOfClients, збережена з браузера'));
+    if (!await ask({ title: T('Загрузить клиентов из файла?', 'Завантажити клієнтів з файлу?'), ok: T('Загрузить', 'Завантажити'),
+      text: `${esc(f.name)} · ${T('клиентов', 'клієнтів')}: <b>${items.length}</b>. ${T('Запросы к 1С не тратятся.', 'Запити до 1С не витрачаються.')}` })) return;
+    $('#up1c-l').classList.add('dis'); toast(T('Загружаю…', 'Завантажую…'));
+    try { const r = await api('/logist/admin/clients-upload', { method: 'POST', body: { items } }); toast(T(`Готово: ${r.total} клиентов, новых ${r.added}, изменилось ${r.changed}`, `Готово: ${r.total} клієнтів, нових ${r.added}, змінилося ${r.changed}`)); }
+    catch (ex) { toast(ex.message); }
+    viewData1c();
+  };
   $('#sync-go').onclick = async () => {
     if (!await ask({ title: T('Загрузить клиентов из 1С сейчас?', 'Завантажити клієнтів з 1С зараз?'), ok: T('Загрузить', 'Завантажити'),
       text: T('Займёт до пары минут. Это один из 20 разрешённых запросов к 1С в сутки — без нужды лучше дождаться ночной загрузки.', 'Займе до кількох хвилин. Це один із 20 дозволених запитів до 1С на добу — без потреби краще дочекатися нічного завантаження.') })) return;
@@ -1193,7 +1318,7 @@ async function viewData1c() {
   try {
     const d = await api('/logist/admin/clients');
     const lo = d.last_ok, dur = x => x.finished_at ? Math.max(1, Math.round((new Date(x.finished_at) - new Date(x.started_at)) / 1000)) + T(' с', ' с') : '—';
-    const SRC = { schedule: T('ночью', 'вночі'), manual: T('вручную', 'вручну') };
+    const SRC = { schedule: T('ночью', 'вночі'), manual: T('кнопкой', 'кнопкою'), file: T('файлом', 'файлом') };
     const ST = { ok: `<span class="pill ok">${T('успешно', 'успішно')}</span>`, error: `<span class="pill er">${T('ошибка', 'помилка')}</span>`, running: `<span class="pill">${T('идёт', 'триває')}</span>` };
     const fields = lo && lo.fields ? Object.entries(lo.fields).sort((a, b) => b[1].filled - a[1].filled) : [];
     const pct = n => d.clients ? Math.round(n / (lo.total || d.clients) * 100) : 0;
