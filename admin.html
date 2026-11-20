@@ -479,7 +479,7 @@ const I18N_UK = {
   'Воркфлоу «каталог сайта» не установлен или не опубликован в n8n': 'Воркфлоу «каталог сайту» не встановлено або не опубліковано в n8n',
   'Без фото — без служебных позиций («_Акція…», материалы цеха).': 'Без фото — без службових позицій («_Акція…», матеріали цеху).',
   // ── подсказки из каталога в проверке приёмки (a16) ──
-  'с сайта': 'із сайту', 'Подставить': 'Підставити', 'совпадает с сайтом': 'збігається із сайтом', 'другой бренд': 'інший бренд',
+  'с сайта': 'із сайту', 'название с сайта': 'назва із сайту', 'Заменить': 'Замінити', 'Подставить': 'Підставити', 'совпадает с сайтом': 'збігається із сайтом', 'другой бренд': 'інший бренд',
   'служебная': 'службова', 'Подставить с сайта': 'Підставити із сайту', 'Подставлено с сайта': 'Підставлено із сайту',
   'по штрихкоду': 'за штрихкодом', 'по артикулу': 'за артикулом', 'по внутр. артикулу': 'за внутр. артикулом', 'по номеру производителя': 'за номером виробника',
   'Подсказки «с сайта» — из каталога k-h.com.ua по штрихкоду, артикулу и номеру производителя. «Подставить» вписывает код 1С, а пустое название — из каталога.': 'Підказки «із сайту» — з каталогу k-h.com.ua за штрихкодом, артикулом і номером виробника. «Підставити» вписує код 1С, а порожню назву — з каталогу.'
@@ -508,6 +508,7 @@ const I18N_RX = [
   [/^(\d+) мин (\d+) с$/, m => `${m[1]} хв ${m[2]} с`],
   [/^(\d+) с$/, m => `${m[1]} с`],
   [/^на сайте (\d+) фото$/, m => `на сайті ${m[1]} фото`],
+  [/^Подставить код 1С с сайта у товаров: (\d+)\? Только точные совпадения: тот же бренд, один товар на сайте\.$/, m => `Підставити код 1С із сайту для товарів: ${m[1]}? Лише точні збіги: той самий бренд, один товар на сайті.`],
   [/^ещё (\d+) на сайте$/, m => `ще ${m[1]} на сайті`],
   [/^записано страниц: (\d+), товаров: (\d+)$/, m => `записано сторінок: ${m[1]}, товарів: ${m[2]}`],
   [/^Записано страниц: (\d+) из (\d+)$/, m => `Записано сторінок: ${m[1]} з ${m[2]}`],
@@ -684,7 +685,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a16';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a17';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1948,6 +1949,7 @@ let intakeF = 'all';
 function aiNote(i, f) {
   const a = i.ai; if (!a) return '';
   const w = t => `<div class="ai-n wa">${t}</div>`, o = t => `<div class="ai-n">${t}</div>`;
+  if (a.brand_source === 'catalog') return f === 'article' || f === 'brand' || (f === 'name' && a.name) ? o('<span>с сайта</span>') : '';
   if (f === 'article') return a.article_check === 'label' ? w('<span>прочитан ИИ — сверьте с коробкой</span>') : a.article_check === 'confirmed' ? o('<span>совпал с этикеткой</span>') : '';
   if (f === 'brand') {
     if (a.brand_conflict && a.brand_label) return w(`<span>на этикетке:</span> <b data-noi18n>${esc(a.brand_label)}</b>`);
@@ -1985,7 +1987,12 @@ async function viewIntake(id) {
   function sugHtml(i) {
     const c = M[i.id] || [];
     if (!c.length) return '';
-    if (c.some(x => x.same_code)) return '<div class="ai-n ok"><span>совпадает с сайтом</span></div>';
+    const sc = c.find(x => x.same_code);
+    if (sc) return '<div class="ai-n ok"><span>совпадает с сайтом</span></div>'
+      + (num(sc.photo_count) ? `<div class="ai-n">${esc('на сайте ' + num(sc.photo_count) + ' фото')}</div>` : '')
+      + (sc.name && sc.name !== (i.name || '') ? `<div class="sug"><div class="sg-h"><span>название с сайта</span>
+          <button class="btn sm" type="button" data-nm="${num(i.id)}">${i.name ? 'Заменить' : 'Подставить'}</button></div>
+          <div data-noi18n>${esc(sc.name)}</div></div>` : '');
     const open = sugOpen.has(num(i.id));
     return c.filter(x => x.sku).slice(0, open ? 3 : 1).map((x, k) => `<div class="sug"><div class="sg-h"><span>с сайта</span> <span class="mono" data-noi18n>${esc(x.sku)}</span>
         <button class="btn sm" type="button" data-sug="${num(i.id)}:${k}">Подставить</button></div>
@@ -2039,6 +2046,14 @@ async function viewIntake(id) {
       el.disabled = false;
     });
     body.querySelectorAll('[data-sgm]').forEach(b => b.onclick = () => { sugOpen.add(num(b.dataset.sgm)); draw(); });
+    body.querySelectorAll('[data-nm]').forEach(b => b.onclick = async () => {
+      const it = items.find(x => num(x.id) === num(b.dataset.nm)), sc = (M[b.dataset.nm] || []).find(x => x.same_code);
+      if (!it || !sc) return;
+      b.disabled = true;
+      try { await api('/photo/admin/item-edit', { method: 'POST', body: { item_id: num(it.id), field: 'name', value: sc.name } }); it.name = sc.name; delete taskCache[t.id]; toast('Подставлено с сайта'); }
+      catch (e) { toast(e.message, 4000); }
+      draw();
+    });
     body.querySelectorAll('[data-sug]').forEach(b => b.onclick = async () => {
       const [id, k] = b.dataset.sug.split(':').map(Number);
       const it = items.find(x => num(x.id) === id), x = (M[id] || [])[k];
