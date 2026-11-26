@@ -194,6 +194,8 @@ td.ck input, th.ck input { width: 17px; height: 17px; cursor: pointer; accent-co
 .ig .noph { width: 54px; height: 54px; border-radius: 8px; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--mu); font-size: 11px; }
 .thm { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 .x1c { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.xsite { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 12px; }
+.xsite a { color: var(--bl); }
 .x1c label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
 .x1c-sum { margin: -2px 0 10px; font-size: 12.5px; }
 .xov { position: fixed; inset: 0; z-index: 60; background: rgba(10,12,16,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -453,7 +455,15 @@ const I18N_UK = {
   'Данные для 1С проверены': 'Дані для 1С перевірено', 'Требуется проверка данных для 1С': 'Потрібна перевірка даних для 1С', 'товаров пока нет': 'товарів поки немає',
   'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані',
   // ── выгрузка в 1С (a12) ──
-  'Выгрузка в 1С': 'Вивантаження в 1С', 'Отчёт Excel': 'Звіт Excel',
+  'Выгрузка в 1С': 'Вивантаження в 1С', 'Отправить на сайт': 'Надіслати на сайт', 'Отправить': 'Надіслати', 'Считаю…': 'Рахую…',
+  'отправляется': 'надсилається', 'ошибка отправки': 'помилка надсилання', 'на сайте': 'на сайті', 'забрано в 1С': 'забрано в 1С', 'открыть': 'відкрити',
+  'удалено на сайте': 'видалено на сайті', 'Нечего отправлять': 'Нічого надсилати', 'временный код NEW-…': 'тимчасовий код NEW-…', 'нет на сайте': 'немає на сайті',
+  'Фото уходят на сайт k-h.com.ua, оттуда их забирает 1С. Какие фото и какое главное — как в «Выгрузке в 1С». Одно и то же фото повторно не отправляется.': 'Фото йдуть на сайт k-h.com.ua, звідти їх забирає 1С. Які фото та яке головне — як у «Вивантаженні в 1С». Те саме фото повторно не надсилається.',
+  'Воркфлоу «отправка фото на сайт» не установлен или не опубликован в n8n': 'Воркфлоу «надсилання фото на сайт» не встановлено або не опубліковано в n8n',
+  'Сайт не ответил на проверку — повторю позже': 'Сайт не відповів на перевірку — повторю пізніше', 'Отправка прервалась, проверяю, дошло ли': 'Надсилання перервалося, перевіряю, чи дійшло',
+  'Фото не дошло до сайта — можно отправить снова': 'Фото не дійшло до сайту — можна надіслати знову', 'Не удалось скачать фото из хранилища': 'Не вдалося завантажити фото зі сховища',
+  'Каталог сайта не загружен — сначала «Каталог» → «Загрузить сейчас»': 'Каталог сайту не завантажено — спершу «Каталог» → «Завантажити зараз»',
+'Отчёт Excel': 'Звіт Excel',
   'Адрес папки на сервере': 'Адреса папки на сервері', 'Папка партии': 'Папка партії',
   'Только проверенные товары': 'Лише перевірені товари', 'Скачать архив: фото + Excel': 'Завантажити архів: фото + Excel',
   'Нечего выгружать': 'Нема чого вивантажувати', 'Собираю архив…': 'Збираю архів…', 'Готово': 'Готово', 'Не загрузилась библиотека архива': 'Не завантажилася бібліотека архіву',
@@ -509,6 +519,16 @@ const I18N_RX = [
   [/^(\d+) мин (\d+) с$/, m => `${m[1]} хв ${m[2]} с`],
   [/^(\d+) с$/, m => `${m[1]} с`],
   [/^на сайте (\d+) фото$/, m => `на сайті ${m[1]} фото`],
+  [/^на сайт № (\d+)$/, m => `на сайт № ${m[1]}`],
+  [/^Будет отправлено: товаров (\d+), фото (\d+)$/, m => `Буде надіслано: товарів ${m[1]}, фото ${m[2]}`],
+  [/^Уже отправлено раньше: (\d+) фото$/, m => `Уже надіслано раніше: ${m[1]} фото`],
+  [/^Пропущено, временный код NEW-…: (\d+)$/, m => `Пропущено, тимчасовий код NEW-…: ${m[1]}`],
+  [/^Пропущено, товара нет на сайте: (\d+)$/, m => `Пропущено, товару немає на сайті: ${m[1]}`],
+  [/^Пропущено непроверенных: (\d+)$/, m => `Пропущено неперевірених: ${m[1]}`],
+  [/^Пропущено без фото: (\d+)$/, m => `Пропущено без фото: ${m[1]}`],
+  [/^Отправка началась: (\d+) фото$/, m => `Надсилання почалося: ${m[1]} фото`],
+  [/^На сайте уже есть другое фото № (\d+) этого товара \((.+)\)$/, m => `На сайті вже є інше фото № ${m[1]} цього товару (${m[2]})`],
+  [/^Нет ответа сайта, проверяю, дошло ли: (.+)$/, m => `Немає відповіді сайту, перевіряю, чи дійшло: ${m[1]}`],
   [/^Подставить код 1С с сайта у товаров: (\d+)\? Только точные совпадения: тот же бренд, один товар на сайте\.$/, m => `Підставити код 1С із сайту для товарів: ${m[1]}? Лише точні збіги: той самий бренд, один товар на сайті.`],
   [/^ещё (\d+) на сайте$/, m => `ще ${m[1]} на сайті`],
   [/^записано страниц: (\d+), товаров: (\d+)$/, m => `записано сторінок: ${m[1]}, товарів: ${m[2]}`],
@@ -686,7 +706,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a18';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a19';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1144,7 +1164,7 @@ async function viewTask(id) {
   view.innerHTML = `
     <div class="crumb"><a href="#tasks">← Задания</a></div>
     <div class="hd"><div><h1>${esc(t.title)}</h1><div class="sub">${esc(t.file_name || 'без файла')} · создано ${fmtDate(t.created_at)}${t.status === 'closed' ? ' <span class="pill ok">закрыто</span>' : ''}</div></div>
-      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn pri" type="button" id="x1c">Выгрузка в 1С</button><button class="btn" type="button" id="xls">Отчёт Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
+      <div class="bar"><label class="mu" for="t-ph">Фотограф</label><select class="in" id="t-ph" aria-label="Фотограф задания"><option>${esc(t.photographer || '—')}</option></select><button class="btn pri" type="button" id="x-site">Отправить на сайт</button><button class="btn" type="button" id="x1c">Выгрузка в 1С</button><button class="btn" type="button" id="xls">Отчёт Excel</button>${Auth.isAdmin() ? `<a class="btn" href="#audit-${num(t.id)}">Журнал</a>` : ''}<button class="btn" type="button" id="t-close">${t.status === 'closed' ? 'Открыть снова' : 'Закрыть задание'}</button><button class="btn" type="button" id="refresh">Обновить</button></div></div>
     ${t.source === 'intake' ? `<div class="card intake-hd st-${ist[0]}"><div><b>Приёмка товара</b>${t.intake_brand ? ` · <span>бренд</span> <b data-noi18n>${esc(t.intake_brand)}</b>` : ''} ·
         ${t.finished_at ? `<span>передано завскладу ${fmtDate(t.finished_at)}</span>` : '<span>фотограф ещё снимает</span>'}
         <div class="ih-st">${ist[0] === 'ok' ? `<b>Данные для 1С проверены</b>${verLast ? ` · <span data-noi18n>${esc(verLast.verified_by || '')}</span>, ${fmtDate(verLast.verified_at)}` : ''}`
@@ -1188,7 +1208,7 @@ async function viewTask(id) {
         <td class="mono nw">${esc(i.cell) || '<span class="mu">—</span>'}</td>
         <td>${esc(i.name || '')}</td>
         <td class="nw">${ph.length ? `<span class="thumbs">${th}${ph.length > 5 ? '<em>+' + (ph.length - 5) + '</em>' : ''}</span>` : '<span class="mu">—</span>'}</td>
-        <td>${statusPill(i)} ${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}${t.source === 'intake' ? (ver[num(i.id)] ? ' <span class="pill ok">проверено</span>' : ' <span class="pill wa">не проверено</span>') : ''}</td></tr>`;
+        <td>${statusPill(i)} ${sitePill(id, i)}${itemFlags(i).map(f => `<span class="pill ${f[0]}">${esc(f[1])}</span>`).join(' ')}${t.source === 'intake' ? (ver[num(i.id)] ? ' <span class="pill ok">проверено</span>' : ' <span class="pill wa">не проверено</span>') : ''}</td></tr>`;
     }).join('') || '<tr><td colspan="7" class="empty">Ничего не найдено</td></tr>';
     bindRowLinks();
     body.querySelectorAll('[data-ck]').forEach(c => c.onchange = () => { const k = num(c.dataset.ck); c.checked ? picked.add(k) : picked.delete(k); drawBulk(); });
@@ -1236,6 +1256,17 @@ async function viewTask(id) {
     b.disabled = false; b.textContent = 'Отчёт Excel';
   };
   $('#x1c').onclick = () => openExport(id).catch(e => toast(e.message));
+  $('#x-site').onclick = () => openSiteSend(id, () => pollSite());
+  // статус отправки на сайт у товаров; пока что-то отправляется — обновляем каждые 5 секунд
+  const pollSite = async () => {
+    clearTimeout(pollSite._t);
+    if (location.hash !== '#task-' + num(id)) return;
+    const s = await loadSiteSend(id, true);
+    if (location.hash !== '#task-' + num(id)) return;
+    draw();
+    if (s && s.busy) pollSite._t = setTimeout(pollSite, 5000);
+  };
+  pollSite();
   loadPhotographers().then(dd => {
     const sel = $('#t-ph'); if (!sel) return;
     const list = (dd.photographers || []).slice();
@@ -1370,6 +1401,82 @@ async function openExport(taskId) {
   };
 }
 
+// ─── Отправка фото на сайт k-h.com.ua (воркфлоу 10); оттуда их забирает 1С ───
+// Какие фото — как в «Выгрузке в 1С». Одно фото уходит один раз; статус «в 1С» приходит с сайта раз в 15 минут.
+const siteSend = {};     // task_id → { t, busy, items: { item_id: { total, sent, synced, wait, error, last_error, photos } } }
+async function loadSiteSend(taskId, force) {
+  const c = siteSend[taskId];
+  if (c && !force && Date.now() - c.t < 30000) return c;
+  try { const r = await api('/photo/admin/site-status?task_id=' + num(taskId)); siteSend[taskId] = { t: Date.now(), busy: !!r.busy, items: r.items || {} }; }
+  catch (_) { siteSend[taskId] = c || { t: Date.now(), busy: false, items: {} }; }   // воркфлоу 10 нет — просто без статусов
+  return siteSend[taskId];
+}
+function sitePill(taskId, it) {
+  const s = siteSend[taskId] && siteSend[taskId].items[it.id];
+  if (!s) return '';
+  if (num(s.wait)) return '<span class="pill bl">отправляется</span> ';
+  if (num(s.error)) return `<span class="pill er" title="${esc(s.last_error || '')}">ошибка отправки</span> `;
+  if (num(s.sent) && num(s.synced) === num(s.sent)) return '<span class="pill ok">забрано в 1С</span> ';
+  if (num(s.sent)) return '<span class="pill bl">на сайте</span> ';
+  return '';
+}
+function sitePhotoHtml(taskId, it, p) {
+  const s = siteSend[taskId] && siteSend[taskId].items[it.id], x = s && s.photos && s.photos[p.photo_uid];
+  if (!x) return '';
+  const st = x.status === 'sent' && x.deleted ? '<span class="pill">удалено на сайте</span>'
+    : x.status === 'sent' ? (x.synced ? '<span class="pill ok">забрано в 1С</span>' : '<span class="pill bl">на сайте</span>')
+    : x.status === 'error' ? `<span class="pill er">ошибка отправки</span> <span class="mu">${esc(x.error || '')}</span>`
+    : '<span class="pill bl">отправляется</span>';
+  return `<span class="xsite"><span>${esc('на сайт № ' + num(x.idx))}</span> ${st}${x.url && x.status === 'sent' ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">открыть</a>` : ''}</span>`;
+}
+async function openSiteSend(taskId, after) {
+  const d = await loadTask(taskId);
+  const intake = d.task.source === 'intake';
+  const ov = document.createElement('div'); ov.className = 'xov';
+  ov.innerHTML = `<div class="card xbox" role="dialog" aria-modal="true" aria-labelledby="s-ttl">
+    <div class="bar" style="justify-content:space-between"><h2 id="s-ttl" style="margin:0;font-size:18px">Отправить на сайт</h2><button class="btn sm" type="button" id="s-close">Закрыть</button></div>
+    <div class="mu" style="font-size:13px">Фото уходят на сайт k-h.com.ua, оттуда их забирает 1С. Какие фото и какое главное — как в «Выгрузке в 1С». Одно и то же фото повторно не отправляется.</div>
+    <label class="stack" style="gap:4px"><span class="mu">Версия фото</span><select class="in" id="s-var">
+      ${[['web', 'Белый фон'], ['light', 'Засветка'], ['orig', 'Оригинал']].map(([k, l]) => `<option value="${k}"${k === expSet.variant ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${intake ? `<label class="bar"><input type="checkbox" id="s-ver"${expSet.onlyVerified ? ' checked' : ''}> <span>Только проверенные товары</span></label>` : ''}
+    <div class="note" id="s-sum"><span>Считаю…</span></div>
+    <div class="bar"><button class="btn pri" type="button" id="s-go" disabled>Отправить</button></div></div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  $('#s-close').onclick = close; ov.onclick = e => { if (e.target === ov) close(); else if (e.target.closest('a[href^="#"]')) close(); };
+  const body = dry => ({ task_id: num(taskId), variant: $('#s-var').value, only_verified: intake ? $('#s-ver').checked : true, dry });
+  const why = { no_code: 'временный код NEW-…', not_on_site: 'нет на сайте' };
+  let req = 0;
+  const calc = async () => {
+    const my = ++req, box = $('#s-sum'); $('#s-go').disabled = true;
+    expSet.variant = $('#s-var').value; if (intake) expSet.onlyVerified = $('#s-ver').checked; saveExpSet();
+    let r;
+    try { r = await api('/photo/admin/site-send', { method: 'POST', body: body(true) }); }
+    catch (e) { if (my === req) box.innerHTML = `<span style="color:var(--er)">${esc(e.status === 404 ? 'Воркфлоу «отправка фото на сайт» не установлен или не опубликован в n8n' : e.message)}</span>`; return; }
+    if (my !== req) return;
+    const p = r.plan || {};
+    box.innerHTML = `<b>${esc('Будет отправлено: товаров ' + num(p.items) + ', фото ' + num(p.photos))}</b>`
+      + (num(p.already) ? `<div>${esc('Уже отправлено раньше: ' + num(p.already) + ' фото')}</div>` : '')
+      + (num(p.no_code) ? `<div>${esc('Пропущено, временный код NEW-…: ' + num(p.no_code))}</div>` : '')
+      + (num(p.not_on_site) ? `<div>${esc('Пропущено, товара нет на сайте: ' + num(p.not_on_site))}</div>` : '')
+      + (num(p.unverified) ? `<div>${esc('Пропущено непроверенных: ' + num(p.unverified))}</div>` : '')
+      + (num(p.no_photo) ? `<div>${esc('Пропущено без фото: ' + num(p.no_photo))}</div>` : '')
+      + ((p.skipped || []).length ? `<div class="xsk mu" style="font-size:12.5px">${(p.skipped || []).map(x =>
+          `<a href="${intake ? '#intake-' + num(taskId) : '#item-' + num(taskId) + '-' + num(x.item_id)}" data-noi18n>${esc(x.article)}</a> <span>${why[x.reason] || ''}</span>`).join(', ')}</div>` : '');
+    $('#s-go').disabled = !num(p.photos);
+  };
+  ov.querySelectorAll('input, select').forEach(el => el.addEventListener('change', calc));
+  $('#s-go').onclick = async () => {
+    const b = $('#s-go'); b.disabled = true;
+    try {
+      const r = await api('/photo/admin/site-send', { method: 'POST', body: body(false) });
+      toast(num(r.queued) ? 'Отправка началась: ' + num(r.queued) + ' фото' : 'Нечего отправлять');
+      close(); if (after) after();
+    } catch (e) { toast(e.message, 4000); b.disabled = false; }
+  };
+  calc();
+}
+
 // ─── Карточка товара ──────────────────────────────────────
 async function viewItem(taskId, itemId) {
   navOn('tasks');
@@ -1380,6 +1487,7 @@ async function viewItem(taskId, itemId) {
   const photos = (it.photos || []).filter(p => p.file_url);
   const n = photos.length;
   const cfg = await loadExpCfg(taskId);
+  await loadSiteSend(taskId);
   const xl = expList(it, cfg), xpos = uid => xl.findIndex(p => p.photo_uid === uid);
   // соседи по тому же списку, что в задании (вкладка, поиск, порядок); если товара в нём нет — по всем товарам
   let nav = taskVisible(d.items || []);
@@ -1410,6 +1518,7 @@ async function viewItem(taskId, itemId) {
               <span class="mu">${p.width || '—'}×${p.height || '—'} · ${fmtMP(p.width, p.height)} · ${fmtMB(p.size_bytes)}</span>
               ${lowRes(p) ? '<span><span class="pill wa">низкое разрешение</span></span>' : ''}
               <span class="noweb" hidden><span class="pill">${bgMode === 'light' ? 'засветки нет' : 'белого фона нет'}</span></span>
+              ${sitePhotoHtml(taskId, it, p)}
               ${p.status === 'stored' ? `<span class="x1c"><label><input type="checkbox" data-xin="${esc(p.photo_uid)}"${xpos(p.photo_uid) >= 0 ? ' checked' : ''}> <span>в 1С</span></label>
                 ${xpos(p.photo_uid) === 0 ? '<span class="pill ok">главное</span>' : xpos(p.photo_uid) > 0 ? `<button type="button" class="btn sm" data-xmain="${esc(p.photo_uid)}">Сделать главным</button>` : ''}</span>` : ''}</figcaption>
           </figure>`).join('')}</div>` : '<div class="empty">Фотограф ещё не снял этот товар</div>'}
