@@ -12,7 +12,7 @@ window.addEventListener('error', e => showFatal(e.message || 'неизвестн
 window.addEventListener('unhandledrejection', e => showFatal((e.reason && e.reason.message) || e.reason || 'ошибка'));
 
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
-const APP_VERSION = 'v22';
+const APP_VERSION = 'v23';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 
 // Словарь: русский текст экрана → украинский. Ключи — ровно те надписи, что рисует админка.
@@ -818,7 +818,7 @@ async function viewTask(id) {
       const n = num(i.photos_stored) + localCount(i);
       const pill = i.status === 'done' ? '<span class="pill ok">снят</span>' : i.status === 'absent' ? '<span class="pill er">нет</span>' : n ? `<span class="pill bl">${n} фото</span>` : '<span class="pill">не снят</span>';
       const sp = sitePh(d.task.id, i);
-      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}${sp ? ` · <span class="wa">${esc('на сайте ' + num(sp.photo_count) + ' фото')}</span>` : ''}</span></a>`;
+      return `<a class="row" href="#item-${num(d.task.id)}-${num(i.id)}"><span class="a">${i.cell ? `<span class="cell">${esc(i.cell)}</span> ` : ''}${esc(i.article)}</span>${pill}<span class="n">${sp ? `<span class="wa">${esc('на сайте ' + num(sp.photo_count) + ' фото')}</span> · ` : ''}${i.row_no ? '№ ' + esc(i.row_no) + ' · ' : ''}${esc(i.brand || '')} · ${esc(i.name || '')}</span></a>`;
     }).join('') || `<div class="empty">${q ? 'Ничего не найдено' : 'Здесь пусто'}</div>`;
     const rest = total - list.length, mb = $('#more');
     mb.hidden = rest <= 0;
