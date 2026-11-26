@@ -455,7 +455,7 @@ const I18N_UK = {
   'Данные для 1С проверены': 'Дані для 1С перевірено', 'Требуется проверка данных для 1С': 'Потрібна перевірка даних для 1С', 'товаров пока нет': 'товарів поки немає',
   'Открыть проверку': 'Відкрити перевірку', 'Проверить данные': 'Перевірити дані',
   // ── выгрузка в 1С (a12) ──
-  'Выгрузка в 1С': 'Вивантаження в 1С', 'Отправить на сайт': 'Надіслати на сайт', 'Отправить': 'Надіслати', 'Считаю…': 'Рахую…',
+  'Выгрузка в 1С': 'Вивантаження в 1С', 'Отправить на сайт': 'Надіслати на сайт', 'Только отмеченные товары': 'Лише позначені товари', 'Отправить': 'Надіслати', 'Считаю…': 'Рахую…',
   'отправляется': 'надсилається', 'ошибка отправки': 'помилка надсилання', 'на сайте': 'на сайті', 'забрано в 1С': 'забрано в 1С', 'открыть': 'відкрити',
   'удалено на сайте': 'видалено на сайті', 'Нечего отправлять': 'Нічого надсилати', 'временный код NEW-…': 'тимчасовий код NEW-…', 'нет на сайте': 'немає на сайті',
   'Фото уходят на сайт k-h.com.ua, оттуда их забирает 1С. Какие фото и какое главное — как в «Выгрузке в 1С». Одно и то же фото повторно не отправляется.': 'Фото йдуть на сайт k-h.com.ua, звідти їх забирає 1С. Які фото та яке головне — як у «Вивантаженні в 1С». Те саме фото повторно не надсилається.',
@@ -706,7 +706,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a19';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a20';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1256,7 +1256,7 @@ async function viewTask(id) {
     b.disabled = false; b.textContent = 'Отчёт Excel';
   };
   $('#x1c').onclick = () => openExport(id).catch(e => toast(e.message));
-  $('#x-site').onclick = () => openSiteSend(id, () => pollSite());
+  $('#x-site').onclick = () => openSiteSend(id, () => pollSite(), [...picked]);
   // статус отправки на сайт у товаров; пока что-то отправляется — обновляем каждые 5 секунд
   const pollSite = async () => {
     clearTimeout(pollSite._t);
@@ -1429,7 +1429,8 @@ function sitePhotoHtml(taskId, it, p) {
     : '<span class="pill bl">отправляется</span>';
   return `<span class="xsite"><span>${esc('на сайт № ' + num(x.idx))}</span> ${st}${x.url && x.status === 'sent' ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">открыть</a>` : ''}</span>`;
 }
-async function openSiteSend(taskId, after) {
+async function openSiteSend(taskId, after, picked) {
+  picked = (picked || []).map(num).filter(Boolean);
   const d = await loadTask(taskId);
   const intake = d.task.source === 'intake';
   const ov = document.createElement('div'); ov.className = 'xov';
@@ -1438,13 +1439,15 @@ async function openSiteSend(taskId, after) {
     <div class="mu" style="font-size:13px">Фото уходят на сайт k-h.com.ua, оттуда их забирает 1С. Какие фото и какое главное — как в «Выгрузке в 1С». Одно и то же фото повторно не отправляется.</div>
     <label class="stack" style="gap:4px"><span class="mu">Версия фото</span><select class="in" id="s-var">
       ${[['web', 'Белый фон'], ['light', 'Засветка'], ['orig', 'Оригинал']].map(([k, l]) => `<option value="${k}"${k === expSet.variant ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${picked.length ? `<label class="bar"><input type="checkbox" id="s-sel" checked> <span>Только отмеченные товары</span> <span data-noi18n>(${picked.length})</span></label>` : ''}
     ${intake ? `<label class="bar"><input type="checkbox" id="s-ver"${expSet.onlyVerified ? ' checked' : ''}> <span>Только проверенные товары</span></label>` : ''}
     <div class="note" id="s-sum"><span>Считаю…</span></div>
     <div class="bar"><button class="btn pri" type="button" id="s-go" disabled>Отправить</button></div></div>`;
   document.body.appendChild(ov);
   const close = () => ov.remove();
   $('#s-close').onclick = close; ov.onclick = e => { if (e.target === ov) close(); else if (e.target.closest('a[href^="#"]')) close(); };
-  const body = dry => ({ task_id: num(taskId), variant: $('#s-var').value, only_verified: intake ? $('#s-ver').checked : true, dry });
+  const body = dry => ({ task_id: num(taskId), variant: $('#s-var').value, only_verified: intake ? $('#s-ver').checked : true, dry,
+    item_ids: picked.length && $('#s-sel') && $('#s-sel').checked ? picked : [] });
   const why = { no_code: 'временный код NEW-…', not_on_site: 'нет на сайте' };
   let req = 0;
   const calc = async () => {
