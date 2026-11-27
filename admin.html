@@ -564,7 +564,7 @@ const I18N_RX = [
   [/^версия (.+)$/, m => `версія ${m[1]}`],
   [/^передано завскладу (.+)$/, m => `передано завскладу ${m[1]}`],
   [/^проверить для 1С · (\d+)$/, m => `перевірити для 1С · ${m[1]}`],
-  [/^Excel без заголовков: код 1С и ссылка на фото\. Фото (\d+)×(\d+), имена nw_Бренд_Артикул_N\.jpg, № 1 — главное\.$/, m => `Excel без заголовків: код 1С і посилання на фото. Фото ${m[1]}×${m[2]}, імена nw_Бренд_Артикул_N.jpg, № 1 — головне.`],
+  [/^Excel без заголовков: код 1С и ссылка на фото\. Фото (\d+)×(\d+), имена w_Бренд_Артикул_N\.jpg, № 1 — главное\.$/, m => `Excel без заголовків: код 1С і посилання на фото. Фото ${m[1]}×${m[2]}, імена nw_Бренд_Артикул_N.jpg, № 1 — головне.`],
   [/^Товаров: (\d+), фото: (\d+)$/, m => `Товарів: ${m[1]}, фото: ${m[2]}`],
   [/^Пропущено без кода 1С: (\d+)$/, m => `Пропущено без коду 1С: ${m[1]}`],
   [/^Пропущено без фото: (\d+)$/, m => `Пропущено без фото: ${m[1]}`],
@@ -706,7 +706,7 @@ const I18N = (() => {
   };
 })();
 
-const ADMIN_VERSION = 'a20';      // поднимать при каждой выкладке admin.html; видно внизу меню
+const ADMIN_VERSION = 'a21';      // поднимать при каждой выкладке admin.html; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 const MIN_PHOTOS = 4, MAX_PHOTOS = 14;
 const LOW_RES_PX = 2000;          // длинная сторона меньше — «низкое разрешение»
@@ -1288,7 +1288,7 @@ async function viewTask(id) {
 
 // ─── Выгрузка в 1С ────────────────────────────────────────
 // Формат от Зеніт-Авто: Excel без заголовков, колонки «код 1С» и «ссылка на фото» на их сервере;
-// файлы nw_Бренд_Артикул_N.jpg, N = 1 — главное фото. Все фото — 1024×683 (белые поля, ничего не обрезаем).
+// файлы w_Бренд_Артикул_N.jpg (w_ — своё фото без водяного знака, сайт наложит свой; nw_ — чужое, уже со знаком), N = 1 — главное фото. Все фото — 1024×683 (белые поля, ничего не обрезаем).
 // Какие фото и какое главное — выбирается в карточке товара; по умолчанию все, кроме этикетки (фото № 1).
 const EXP_W = 1024, EXP_H = 683;
 const expSet = (() => { let x = {}; try { x = JSON.parse(localStorage.getItem('zf_export') || '{}') || {}; } catch (_) {} return Object.assign({ base: 'http://data.za.kh.ua/akfyvpds', variant: 'web', onlyVerified: true }, x); })();
@@ -1306,7 +1306,7 @@ function expList(it, cfg) {
   return ph.length > 1 ? ph.slice(1) : ph;          // по умолчанию без этикетки
 }
 const expPart = v => String(v || '').trim().replace(/[\s\/\\.]+/g, '').replace(/[^0-9A-Za-z-]/g, '');
-const expName = (it, n) => `nw_${expPart(it.brand)}_${expPart(it.article)}_${n}.jpg`;
+const expName = (it, n) => `w_${expPart(it.brand)}_${expPart(it.article)}_${n}.jpg`;
 const expSrc = (u, v) => cld(v === 'web' ? webUrl(u) : v === 'light' ? lightUrl(u) : u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
 const expSrcOrig = u => cld(u, `c_pad,w_${EXP_W},h_${EXP_H},b_white,q_90,f_jpg`);
 window.addEventListener('hashchange', () => document.querySelectorAll('.xov').forEach(x => x.remove()));   // окно выгрузки не остаётся поверх другого экрана
@@ -1318,7 +1318,7 @@ async function openExport(taskId) {
   const ov = document.createElement('div'); ov.className = 'xov';
   ov.innerHTML = `<div class="card xbox" role="dialog" aria-modal="true" aria-labelledby="x-ttl">
     <div class="bar" style="justify-content:space-between"><h2 id="x-ttl" style="margin:0;font-size:18px">Выгрузка в 1С</h2><button class="btn sm" type="button" id="x-close">Закрыть</button></div>
-    <div class="mu" style="font-size:13px">Excel без заголовков: код 1С и ссылка на фото. Фото ${EXP_W}×${EXP_H}, имена nw_Бренд_Артикул_N.jpg, № 1 — главное.</div>
+    <div class="mu" style="font-size:13px">Excel без заголовков: код 1С и ссылка на фото. Фото ${EXP_W}×${EXP_H}, имена w_Бренд_Артикул_N.jpg, № 1 — главное.</div>
     <div class="mu" style="font-size:13px">Какие фото уходят в 1С и какое главное — в карточке товара: под каждым фото «в 1С» и «Сделать главным». По умолчанию — все, кроме этикетки.</div>
     <label class="stack" style="gap:4px"><span class="mu">Адрес папки на сервере</span><input class="in mono" id="x-base" value="${esc(expSet.base)}"></label>
     <label class="stack" style="gap:4px"><span class="mu">Папка партии</span><input class="in mono" id="x-folder" value="${esc(ymdS + '_1')}"></label>
