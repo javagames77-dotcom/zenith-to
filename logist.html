@@ -147,6 +147,8 @@ body.need-auth .top, body.need-auth .layout { display: none; }
 .btn.danger { background: var(--er); border-color: var(--er); color: #fff; font-weight: 700; }
 .ck-line { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .sh .t b .sw, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+.mk.edit { width: 26px; height: 26px; background: var(--or); border: 3px solid #fff; box-shadow: 0 0 0 3px var(--or), 0 2px 8px #0008; cursor: grab; }
+.map-hint button[disabled] { opacity: .45; cursor: default; }
 .mk.num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 11px "Golos Text", sans-serif; }
 .km { color: var(--tx); font-weight: 600; }
 .lsw { display: inline-flex; border: 1px solid var(--bd); border-radius: 999px; overflow: hidden; flex: none; vertical-align: middle; }
@@ -246,7 +248,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm8';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm9';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -491,7 +493,8 @@ window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 let R = null;          // ответ сервера: { report, marks, geo, zones, warehouse }
 let selSheet = null;   // номер выбранного листа или null — все
 let tab = 'err';       // err | all | info
-let map = null, layerZones = null, layerRoutes = null, layerPts = null, manualFor = null;
+let map = null, layerZones = null, layerRoutes = null, layerPts = null;
+let Edit = null;       // правка точки: { q, orig, ll, near, moved }
 
 function viewCheck() {
   $('#view').innerHTML = `
@@ -592,7 +595,7 @@ function drawReport() {
       <span class="mu small" id="tab-note"></span></div>
     <div class="tw"><table><thead><tr><th>№</th><th>${T('Клиент', 'Клієнт')}</th><th>${T('Адрес доставки', 'Адреса доставки')}</th><th class="nw">${T('Сумма', 'Сума')}</th><th>${T('Замечания', 'Зауваження')}</th></tr></thead><tbody id="rows"></tbody></table></div>`;
   $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; drawRows(); };
-  $('#map-hint-x').onclick = () => setManual(null);
+  drawEditHint();
   drawKpi(); drawSheets(); initMap(); drawRows(); drawGeoLine();
   Geo.start();
 }
@@ -687,12 +690,16 @@ function initMap() {
   map = L.map('map', { zoomControl: true }).setView([49.99, 36.27], 11);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles © Esri' }).addTo(map);
   layerZones = L.layerGroup().addTo(map); layerRoutes = L.layerGroup().addTo(map); layerPts = L.layerGroup().addTo(map);
-  map.on('click', ev => { if (manualFor) placeManual(ev.latlng); });
+  // кнопки в окошках точек (окошки живут внутри карты)
+  $('#map').addEventListener('click', e => {
+    const mv = e.target.closest('[data-move]'), rs = e.target.closest('[data-reset]');
+    if (mv) startEdit(mv.dataset.move); else if (rs) resetPoint(rs.dataset.reset);
+  });
   drawMap(true);
 }
 const ZPAL = ['#2563eb', '#7c3aed', '#0f766e', '#c2410c', '#be185d', '#4d7c0f', '#0369a1', '#a16207', '#9333ea', '#047857', '#b91c1c', '#1d4ed8'];
 function drawMap(fit) {
-  if (!map) return;
+  if (!map || (Edit && Edit.dragging)) return;       // не мешаем перетаскиванию
   layerZones.clearLayers(); layerRoutes.clearLayers(); layerPts.clearLayers();
   const vs = visibleSheets(), cityCodes = new Set(vs.filter(s => s.type === 'city').map(s => s.code));
   const set = vs.some(s => s.type === 'city' && isSat(s.code)) && !vs.some(s => s.type === 'city' && !isSat(s.code)) ? 'subbota' : 'budni';
@@ -717,8 +724,12 @@ function drawMap(fit) {
   const usedWh = new Set(vs.map(s => s.wh));
   for (const [k, w] of Object.entries(R.warehouses || {})) {
     const c = whCoords(k); if (!c) continue;
+    if (Edit && Edit.q === 'склад:' + k) continue;
+    const gw = R.geo['склад:' + k];
     L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }), opacity: usedWh.has(k) ? 1 : .45 })
-      .addTo(layerPts).bindPopup(`<b>${esc(w.name)}</b><br>${esc(w.address || '')}${!w.coords ? '<br><span style="color:#6b7280">' + T('найден по адресу — проверьте точку; точные координаты можно вписать в справочник', 'знайдено за адресою — перевірте точку; точні координати можна вписати в довідник') + '</span>' : ''}`);
+      .addTo(layerPts).bindPopup(`<b>${esc(w.name)}</b><br>${esc(w.address || '')}${gw && gw.manual ? '<br><span style="color:#6b7280">' + T('поправлено вручную', 'виправлено вручну') + (gw.who ? ' — ' + esc(gw.who) : '') + (gw.at ? ', ' + fmtDT(gw.at) : '') + '</span>'
+        : !w.coords ? '<br><span style="color:#6b7280">' + T('найден по адресу — проверьте точку', 'знайдено за адресою — перевірте точку') + '</span>' : ''}
+        ${Auth.isAdmin() ? `<div class="bar" style="margin-top:6px"><button class="btn sm" type="button" data-move="склад:${esc(k)}">${T('Переместить', 'Перемістити')}</button>${gw && gw.manual ? `<button class="btn sm" type="button" data-reset="склад:${esc(k)}">${T('Вернуть как было', 'Повернути як було')}</button>` : ''}</div>` : ''}`);
   }
   if (!R.warehouses && R.warehouse) L.marker(R.warehouse, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(layerPts).bindPopup('<b>Склад</b>');
   for (const s of vs) {
@@ -726,15 +737,23 @@ function drawMap(fit) {
     for (const r of s.rows) {
       if (!r.q) continue;
       const g = R.geo[r.q]; if (!g || g.nf) continue;
+      if (Edit && Edit.q === r.q) continue;
       const z = zoneStatus(s, r), err = rowIssues(s, r).some(i => i.sev === 'err');
       const col = s.type === 'city' ? (ZCOL[z.cls] || '#6b7280') : (err ? '#b42318' : sheetColor(s));
       const stop = rt && rt.order ? rt.order.indexOf(r.q) + 1 : 0;
       const html = stop > 0 ? `<div class="mk num" style="background:${col}">${stop}</div>` : `<div class="mk" style="background:${col}"></div>`;
       const sz = stop > 0 ? 22 : 16;
       const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }) }).addTo(layerPts);
-      m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}${stop ? T(' · остановка ', ' · зупинка ') + stop : ''}<br>${esc(r.q.replace(/^нп:/, '').split('|')[0])}<br><span style="color:#6b7280">${esc(g.manual ? T('точка поставлена вручную', 'точку поставлено вручну') : T('найдено: ', 'знайдено: ') + (g.label || ''))}</span>${z.text ? `<br><i>${esc(z.text)}</i>` : ''}`);
+      m.bindPopup(`<b>${esc(r.client)}</b><br>${esc(s.code)} · № ${r.n}${stop ? T(' · остановка ', ' · зупинка ') + stop : ''}<br>${esc(r.q.replace(/^нп:/, '').split('|')[0])}<br><span style="color:#6b7280">${g.manual ? esc(T('поправлено вручную', 'виправлено вручну')) + (g.who ? ' — ' + esc(g.who) : '') + (g.at ? ', ' + fmtDT(g.at) : '') : esc(T('найдено: ', 'знайдено: ') + (g.label || ''))}</span>${z.text ? `<br><i>${esc(z.text)}</i>` : ''}
+        <div class="bar" style="margin-top:6px"><button class="btn sm" type="button" data-move="${esc(r.q)}">${T('Переместить', 'Перемістити')}</button>${g.manual ? `<button class="btn sm" type="button" data-reset="${esc(r.q)}">${T('Вернуть найденную', 'Повернути знайдену')}</button>` : ''}</div>`);
       m._pt = s.no + '|' + r.n; bounds.push([g.lat, g.lng]);
     }
+  }
+  if (Edit) {
+    const em = L.marker(Edit.ll, { draggable: true, autoPan: true, zIndexOffset: 1000,
+      icon: L.divIcon({ className: '', html: '<div class="mk edit"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }) }).addTo(layerPts);
+    em.on('dragstart', () => { if (Edit) Edit.dragging = true; });
+    em.on('dragend', () => { if (Edit) Edit.dragging = false; onEditMove(em.getLatLng()); });
   }
   if (fit && bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
 }
@@ -744,19 +763,64 @@ function focusPoint(pt) {
   if (found) { map.setView(found.getLatLng(), 16); found.openPopup(); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 function findRow(pt) { const [no, n] = pt.split('|'); const s = R.report.sheets.find(x => x.no === no); return s ? { s, r: s.rows.find(x => String(x.n) === n) } : {}; }
-function setManual(pt) {
-  manualFor = pt;
-  $('#map-hint').classList.toggle('on', !!pt);
-  if (pt) { const { r } = findRow(pt); $('#map-hint-t').textContent = T('Кликните на карте: ', 'Клацніть на карті: ') + (r ? r.client.slice(0, 40) : ''); $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+// ── правка точки: перетащить → пересчёт сразу → Сохранить / Отмена ──
+function qTitle(q) { return q.startsWith('склад:') ? ((R.warehouses || {})[q.slice(6)] || {}).name || q : q.replace(/^нп:/, '').split('|')[0]; }
+function setManual(pt) { const { r } = findRow(pt); if (r && r.q) startEdit(r.q); }
+function startEdit(q) {
+  if (!map || !R) return;
+  if (Edit) cancelEdit();
+  const isWh = q.startsWith('склад:');
+  const c = isWh ? whCoords(q.slice(6)) : (R.geo[q] && !R.geo[q].nf ? [R.geo[q].lat, R.geo[q].lng] : null);
+  const ll = c || [map.getCenter().lat, map.getCenter().lng];
+  Edit = { q, orig: R.geo[q] ? { ...R.geo[q] } : null, had: q in R.geo, ll, near: '', moved: false };
+  map.closePopup();
+  map.setView(ll, Math.max(map.getZoom(), 16));
+  drawMap(false); drawEditHint();
+  $('#map').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-async function placeManual(ll) {
-  const { s, r } = findRow(manualFor); setManual(null);
-  if (!r || !r.q) return;
-  R.geo[r.q] = { lat: ll.lat, lng: ll.lng, house: true, manual: true, label: T('поставлено вручную', 'поставлено вручну'), src: 'логист', nf: false };
+function drawEditHint() {
+  const h = $('#map-hint'); if (!h) return;
+  h.classList.toggle('on', !!Edit);
+  if (!Edit) return;
+  h.innerHTML = `<span>${esc(qTitle(Edit.q))}: ${Edit.moved ? (Edit.near ? T('рядом ', 'поруч ') + esc(Edit.near) : T('ищу, что рядом…', 'шукаю, що поруч…')) : T('перетащите точку на место', 'перетягніть точку на місце')}</span>
+    <button type="button" id="ed-save" ${Edit.moved ? '' : 'disabled'}>${T('Сохранить', 'Зберегти')}</button><button type="button" id="ed-x">${T('Отмена', 'Скасувати')}</button>`;
+  $('#ed-save').onclick = saveEdit; $('#ed-x').onclick = cancelEdit;
+}
+async function onEditMove(ll) {
+  if (!Edit) return;
+  Edit.ll = [ll.lat, ll.lng]; Edit.moved = true; Edit.near = '';
+  R.geo[Edit.q] = { lat: ll.lat, lng: ll.lng, house: true, manual: true, label: T('поправлено вручную', 'виправлено вручну'), src: 'логист', nf: false,
+    who: Auth.user ? Auth.user.full_name : '', at: new Date().toISOString() };
+  refreshAll(); drawEditHint();
+  Routes.build(Geo.run);                              // зона и ошибки уже пересчитаны, маршрут — следом
+  const q = Edit.q;
+  try {
+    const d = await (await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=uk&zoom=18&lat=${ll.lat}&lon=${ll.lng}`)).json();
+    const a = d.address || {};
+    if (Edit && Edit.q === q) { Edit.near = [a.road || a.pedestrian || a.hamlet || a.village || a.town || a.city, a.house_number].filter(Boolean).join(', ') || (d.display_name || '').split(',').slice(0, 2).join(','); drawEditHint(); }
+  } catch (_) { if (Edit && Edit.q === q) { Edit.near = '—'; drawEditHint(); } }
+}
+async function saveEdit() {
+  if (!Edit || !Edit.moved) return;
+  const q = Edit.q; Edit = null; drawEditHint();
   saveLast(); refreshAll();
-  await Geo.send([r.q]);
-  toast(T('Точка сохранена — для этого адреса больше не ищем', 'Точку збережено — для цієї адреси більше не шукаємо'));
-  if (!Geo.running) Routes.build(Geo.run);
+  await Geo.send([q]);
+  toast(T('Точка сохранена — так будет и в следующих проверках', 'Точку збережено — так буде й у наступних перевірках'));
+}
+function cancelEdit() {
+  if (!Edit) return;
+  if (Edit.had) R.geo[Edit.q] = Edit.orig; else delete R.geo[Edit.q];
+  Edit = null; drawEditHint(); refreshAll(); Routes.build(Geo.run);
+}
+async function resetPoint(q) {
+  if (!await ask({ title: T('Вернуть найденную точку?', 'Повернути знайдену точку?'), ok: T('Вернуть', 'Повернути'),
+    text: T(`Ручная правка «${esc(qTitle(q))}» удалится, адрес снова найдётся на карте — для всех.`, `Ручну правку «${esc(qTitle(q))}» буде видалено, адресу знову знайде на карті — для всіх.`) })) return;
+  try {
+    await api('/logist/geo', { method: 'POST', body: { items: [{ q, reset: true }] } });
+    delete R.geo[q]; map.closePopup(); saveLast(); refreshAll();
+    toast(T('Ручная точка удалена', 'Ручну точку видалено'));
+    Geo.start();
+  } catch (e) { toast(e.message); }
 }
 function refreshAll() {
   drawKpi(); drawSheets(); drawMap(false); drawGeoLine();
@@ -878,6 +942,8 @@ function hav(a, b) { const t = x => x * Math.PI / 180, dl = t(b[0] - a[0]), dn =
 // откуда выезжает лист: склад из справочника; без координат — найденный по адресу; иначе склад с карты зон
 function whCoords(k) {
   const w = (R.warehouses || {})[k]; if (!w) return null;
+  const gm = R.geo['склад:' + k];
+  if (gm && gm.manual && !gm.nf) return [gm.lat, gm.lng];
   if (Array.isArray(w.coords) && w.coords.length === 2) return w.coords;
   const g = R.geo['склад:' + k]; return g && !g.nf ? [g.lat, g.lng] : null;
 }
@@ -935,7 +1001,8 @@ const Routes = {
     } finally { clearTimeout(tm); }
   },
   async build(run) {
-    if (!R || this.busy) return;
+    if (!R) return;
+    if (this.busy) { this.again = true; return; }
     R.routes = R.routes || {};
     this.busy = true; drawGeoLine();
     try {
@@ -951,7 +1018,7 @@ const Routes = {
         saveLast(); drawSheets(); drawMap(false);
         await sleep(1100);
       }
-    } finally { this.busy = false; drawGeoLine(); }
+    } finally { this.busy = false; drawGeoLine(); if (this.again) { this.again = false; this.build(Geo.run); } }
   }
 };
 
@@ -1186,7 +1253,7 @@ function viewHelp() {
     <ul>
       <li>Адреса ищутся сами, прямо у вас на глазах — до 1 адреса в секунду. Найденные запоминаются, в следующие дни появляются сразу.</li>
       <li><span class="dot" style="background:#15803d"></span>в своей зоне · <span class="dot" style="background:#b42318"></span>не та зона · <span class="dot" style="background:#d97706"></span>примерно или вне зон · <span class="dot" style="background:#6b7280"></span>не найден</li>
-      <li>Если адрес не найден или стоит не там — нажмите <b>«Поставить на карте»</b> и кликните нужное место. Помощник запомнит точку.</li>
+      <li>Точка стоит не там — нажмите на неё → <b>«Переместить»</b>, перетащите на место. Зона, ошибки и маршрут пересчитаются сразу; <b>«Сохранить»</b> — запомнить для всех и на следующие дни, «Отмена» — вернуть. Адрес не найден — <b>«Поставить на карте»</b>: точка появится в центре карты, перетащите её. «Вернуть найденную» отменяет ручную правку.</li>
       <li>Линия — <b>примерный</b> объезд от склада и обратно, с номерами остановок при выборе листа. Это подсказка, а не задание водителю.</li>
       <li>Нажмите на строку накладной — карта покажет её точку.</li>
       <li>Изменили зоны в Google My Maps — выгрузите карту в KMZ и загрузите в разделе «Карты зон» (будни или суббота). Новая карта действует сразу, прежнюю можно вернуть.</li>
@@ -1223,7 +1290,7 @@ function viewHelp() {
     <ul>
       <li>Адреси шукаються самі, просто у вас на очах — до 1 адреси на секунду. Знайдені запамʼятовуються, наступними днями зʼявляються одразу.</li>
       <li><span class="dot" style="background:#15803d"></span>у своїй зоні · <span class="dot" style="background:#b42318"></span>не та зона · <span class="dot" style="background:#d97706"></span>приблизно або поза зонами · <span class="dot" style="background:#6b7280"></span>не знайдено</li>
-      <li>Якщо адресу не знайдено або вона стоїть не там — натисніть <b>«Поставити на карті»</b> і клацніть потрібне місце. Помічник запамʼятає точку.</li>
+      <li>Точка стоїть не там — натисніть на неї → <b>«Перемістити»</b>, перетягніть на місце. Зона, помилки й маршрут перерахуються одразу; <b>«Зберегти»</b> — запамʼятати для всіх і на наступні дні, «Скасувати» — повернути. Адресу не знайдено — <b>«Поставити на карті»</b>: точка зʼявиться в центрі карти, перетягніть її. «Повернути знайдену» скасовує ручну правку.</li>
       <li>Лінія — <b>приблизний</b> обʼїзд від складу й назад, з номерами зупинок, коли вибрано лист. Це підказка, а не завдання водієві.</li>
       <li>Натисніть на рядок накладної — карта покаже її точку.</li>
       <li>Змінили зони в Google My Maps — вивантажте карту в KMZ і завантажте в розділі «Карти зон» (будні або субота). Нова карта діє одразу, попередню можна повернути.</li>
