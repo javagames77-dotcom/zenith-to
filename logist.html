@@ -218,6 +218,11 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
   .tw table { min-width: 760px; }
   main { padding: 16px 14px 40px; }
 }
+.tsearch{position:relative;flex:1;min-width:240px;max-width:420px}.tsearch .in{width:100%}
+.tres{display:none;position:absolute;z-index:1000;left:0;right:0;top:100%;margin-top:4px;background:var(--sf);color:var(--tx);border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:360px;overflow:auto;font-size:13px}
+.tres.on{display:block}.tres>div{padding:8px 10px;border-bottom:1px solid var(--bd);cursor:pointer}.tres>div:hover{background:var(--or-soft)}
+.chips{display:inline-flex;gap:2px;margin-left:6px}.chips i{font-style:normal;font-size:10px;padding:0 4px;border-radius:4px;color:#9ca3af;background:rgba(0,0,0,.04)}.chips i.on{color:#fff;background:#15803d}
+.mk.hit{box-shadow:0 0 0 4px rgba(180,35,24,.3)}
 </style>
 </head>
 <body class="need-auth">
@@ -235,6 +240,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
     <a href="#history" data-nav="history"></a>
     <a href="#fix" data-nav="fix"></a>
     <a href="#stats" data-nav="stats"></a>
+    <a href="#trips" data-nav="trips"></a>
     <a href="#book" data-nav="book"></a>
     <a href="#zones" data-nav="zones"></a>
     <a href="#help" data-nav="help"></a>
@@ -419,7 +425,7 @@ const TI = (o, f) => lang === 'uk' && o[f + '_uk'] ? o[f + '_uk'] : o[f];   // �
 const lswHtml = () => `<span class="lsw"><button type="button" data-lang="uk" class="${lang === 'uk' ? 'on' : ''}">UA</button><button type="button" data-lang="ru" class="${lang === 'ru' ? 'on' : ''}">RU</button></span>`;
 function drawChrome() {
   const N = { check: T('Проверка листов', 'Перевірка листів'), fix: T('Исправить адрес в 1С', 'Виправити адресу в 1С'), stats: T('Итоги пилота', 'Підсумки пілоту'),
-    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С'), zones: T('Карты зон', 'Карти зон'), book: T('Маршруты и филиалы', 'Маршрути і філії'), history: T('История проверок', 'Історія перевірок') };
+    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С'), zones: T('Карты зон', 'Карти зон'), book: T('Маршруты и филиалы', 'Маршрути і філії'), trips: T('Карта перевозок', 'Карта перевезень'), history: T('История проверок', 'Історія перевірок') };
   $$('.side a[data-nav]').forEach(a => { a.textContent = N[a.dataset.nav]; });
   $('.side').setAttribute('aria-label', T('Разделы', 'Розділи'));
   $('#logout').textContent = T('Выйти', 'Вийти');
@@ -613,7 +619,8 @@ function route() {
   if ((r === 'users' || r === 'data1c') && !Auth.isAdmin()) r = 'check';
   $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
   if (r !== 'check') Geo.pause = true;
-  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c, zones: viewZones, history: viewHistory, book: viewBook }[r] || viewCheck)();
+  if (r !== 'trips') TG.run++;
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c, zones: viewZones, history: viewHistory, book: viewBook, trips: viewTrips }[r] || viewCheck)();
 }
 window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 
@@ -1434,6 +1441,7 @@ function viewHelp() {
       <li>Какие маршруты и населённые пункты у филиала — берём из «Графика маршрутов». Новый график загрузите в разделе <b>«Маршруты и филиалы»</b>; там же минимум суммы и адрес склада филиала.</li>
       <li>Городские маршруты филиала проверяются по зонам, когда загружена карта зон филиала («Карты зон» → выбрать филиал). Пока карты нет — адрес ищем на карте, но зону не проверяем.</li>
       <li>Почта, самовывоз, автобусы и перемещения между складами не проверяем — у листа будет пометка «не проверяем».</li>
+      <li><b>«Карта перевозок»</b> — межгородские маршруты филиала на выбранный день. Поиск «Как доставить в…» показывает маршрут и дни. Точку села можно перетащить (сначала выберите маршрут) — она сохранится для всех.</li>
     </ul>
     <h2>Если что-то не так</h2>
     <ul><li>Ошибка неверная — отметьте «Ложная тревога» и напишите в комментарии почему: по этим отметкам правим правила.</li>
@@ -1478,6 +1486,7 @@ function viewHelp() {
       <li>Які маршрути й населені пункти у філії — беремо з «Графіка маршрутів». Новий графік завантажте в розділі <b>«Маршрути і філії»</b>; там само мінімум суми й адреса складу філії.</li>
       <li>Міські маршрути філії перевіряються за зонами, коли завантажено карту зон філії («Карти зон» → вибрати філію). Поки карти немає — адресу шукаємо на карті, але зону не перевіряємо.</li>
       <li>Пошту, самовивіз, автобуси й переміщення між складами не перевіряємо — у листа буде позначка «не перевіряємо».</li>
+      <li><b>«Карта перевезень»</b> — міжміські маршрути філії на вибраний день. Пошук «Як доставити в…» показує маршрут і дні. Точку села можна перетягнути (спершу виберіть маршрут) — вона збережеться для всіх.</li>
     </ul>
     <h2>Якщо щось не так</h2>
     <ul><li>Помилка невірна — позначте «Хибна тривога» й напишіть у коментарі чому: за цими позначками правимо правила.</li>
@@ -1707,6 +1716,159 @@ async function bookFile(f) {
       text: T('Проверка листов сразу начнёт работать по нему. Прежний график останется в истории — его можно вернуть.', 'Перевірка листів одразу почне працювати за ним. Попередній графік залишиться в історії — його можна повернути.') })) return;
     try { const r = await api('/logist/book', { method: 'POST', body: { action: 'save', file: bPrev.file, data: bPrev.data } }); bookCache = r; bPrev = null; out.innerHTML = ''; toast(T('График сохранён', 'Графік збережено')); drawBook(r); }
     catch (ex) { toast(ex.message); }
+  };
+}
+
+// ═══ Карта перевозок: маршруты филиалов из графика на карте ═══════════
+// Точки населённых пунктов: города из списка ниже; остальные ищем (по 1 в секунду, рядом с филиалом) и храним в базе
+// под ключом «пункт:Филиал|Название». Логист может перетащить точку — она сохраняется для всех.
+const KNOWN_PL = {"Харьков": [49.9935, 36.2304], "Сумы": [50.9077, 34.7981], "Конотоп": [51.2403, 33.2026], "Шостка": [51.8636, 33.4697], "Глухов": [51.6781, 33.9169], "Путивль": [51.337, 33.87], "Кролевец": [51.548, 33.385], "Бурынь": [51.2, 33.84], "Ромны": [50.751, 33.474], "Лебедин": [50.587, 34.484], "Тростянец": [50.48, 34.965], "Ахтырка": [50.308, 34.899], "Краснополье": [50.774, 35.256], "Недригайлов": [50.83, 33.878], "Липовая Долина": [50.57, 33.79], "Белополье": [51.15, 34.31], "Полтава": [49.5883, 34.5514], "Кременчуг": [49.0659, 33.4204], "Горишние Плавни": [49.015, 33.645], "Светловодск": [49.056, 33.241], "Лубны": [50.0186, 32.9869], "Миргород": [49.967, 33.608], "Хорол": [49.783, 33.272], "Лохвица": [50.36, 33.26], "Гадяч": [50.37, 34.0], "Зеньков": [50.205, 34.365], "Пирятин": [50.24, 32.51], "Кобеляки": [49.147, 34.2], "Новые Санжары": [49.336, 34.317], "Решетиловка": [49.565, 34.072], "Карловка": [49.458, 35.123], "Глобино": [49.396, 33.265], "Козельщина": [49.221, 33.846], "Великая Багачка": [49.776, 33.742], "Кропивницкий": [48.5079, 32.2623], "Александрия": [48.6696, 33.1159], "Знаменка": [48.713, 32.661], "Малая Виска": [48.65, 31.64], "Новоукраинка": [48.316, 31.524], "Новомиргород": [48.78, 31.65], "Бобринец": [48.058, 32.158], "Новоархангельск": [48.659, 30.802], "Добровеличковка": [48.385, 31.18], "Помошная": [48.244, 31.404], "Светлово": [49.056, 33.241], "Николаев": [46.975, 31.9946], "Херсон": [46.6354, 32.6169], "Очаков": [46.613, 31.542], "Вознесенск": [47.568, 31.333], "Первомайск": [48.045, 30.85], "Пивденноукраинск": [47.82, 31.18], "Новая Одеса": [47.31, 31.79], "Новый Буг": [47.693, 32.517], "Баштанка": [47.405, 32.438], "Казанка": [47.837, 32.83], "Днепр": [48.4647, 35.0462], "Каменское": [48.513, 34.603], "Павлоград": [48.535, 35.87], "Самарь": [48.633, 35.224], "Синельниково": [48.318, 35.517], "Никополь": [47.567, 34.394], "Марганец": [47.643, 34.628], "Покров": [47.66, 34.13], "Верхнеднепровск": [48.656, 34.329], "Желтые Воды": [48.346, 33.511], "Пятихатки": [48.41, 33.688], "Петриковка": [48.733, 34.63], "Царичанка": [48.943, 34.479], "Магдалиновка": [48.917, 34.903], "Перещепино": [48.972, 35.36], "Межирич": [48.443, 36.063], "Терновка": [48.524, 36.08], "Першотравенск": [48.347, 36.405], "Шахтёрское": [48.347, 36.405], "Петропавловка": [48.44, 36.45], "Апостолово": [47.661, 33.719], "Зеленодольск": [47.566, 33.65], "Запорожье": [47.8388, 35.1396], "Кривой Рог": [47.9105, 33.3918], "Лозовая": [48.889, 36.317], "Близнюки": [48.853, 36.544], "Изюм": [49.2103, 37.2565], "Боровая": [49.38, 37.62], "Барвенково": [48.905, 37.013], "Славянск": [48.853, 37.605], "Краматорск": [48.73, 37.56], "Чугуев": [49.8353, 36.688], "Балаклея": [49.4627, 36.8586], "Змиев": [49.68, 36.35], "Валки": [49.838, 35.62], "Коломак": [49.837, 35.28], "Берестин": [49.37, 35.44], "Красноград": [49.37, 35.44], "Рогань": [49.913, 36.487], "Печенеги": [49.871, 36.932], "Великий Бурлук": [50.057, 37.391], "Новая Водолага": [49.725, 35.868], "Сахновщина": [49.15, 35.87], "Кегичевка": [49.293, 35.763], "Нежин": [51.0478, 31.8869], "Прилуки": [50.5931, 32.3878], "Чернигов": [51.4982, 31.2893], "Новгород-Северский": [51.99, 33.26], "Сосница": [51.523, 32.498], "Корюковка": [51.771, 32.256], "Мена": [51.52, 32.215], "Семеновка": [52.178, 32.583], "Носовка": [50.931, 31.581], "Козелец": [50.91, 31.115], "Бобровица": [50.743, 31.388], "Ичня": [50.858, 32.391], "Бахмач": [51.181, 32.828], "Городня": [51.892, 31.596], "Сновск": [51.82, 31.95], "Славутич": [51.522, 30.756], "Остер": [50.948, 30.883], "Черкассы": [49.4444, 32.0598], "Смела": [49.23, 31.87], "Чигирин": [49.083, 32.66], "Камянка": [49.03, 32.1], "Золотоноша": [49.668, 32.04], "Канев": [49.75, 31.47], "Чернобай": [49.67, 32.33], "Шпола": [49.01, 31.39], "Звенигородка": [49.08, 30.96], "Тальное": [48.88, 30.69], "Ватутино": [49.01, 31.06], "Корсунь-Шевченковский": [49.42, 31.26], "Городище": [49.29, 31.45], "Житомир": [50.2547, 28.6587], "Винница": [49.2331, 28.4682], "Бердичев": [49.8936, 28.6], "Коростень": [50.95, 28.64], "Звягель": [50.59, 27.62], "Коростышев": [50.31, 29.06], "Малин": [50.77, 29.24], "Олевск": [51.22, 27.65], "Овруч": [51.32, 28.8], "Радомышль": [50.497, 29.234], "Черняхов": [50.456, 28.672], "Чуднов": [50.05, 28.11], "Казатин": [49.717, 28.83], "Андрушевка": [50.02, 29.02], "Брусилов": [50.283, 29.52], "Емильчино": [50.87, 27.8], "Любар": [49.92, 27.74], "Полонное": [50.11, 27.52], "Попельня": [49.95, 29.45], "Ружин": [49.72, 29.21], "Белая Церковь": [49.7968, 30.1311], "Фастов": [50.0781, 29.9178], "Сквира": [49.733, 29.664], "Тараща": [49.56, 30.5], "Кагарлык": [49.86, 30.82], "Мироновка": [49.66, 31.01], "Ржищев": [49.97, 31.04], "Узин": [49.83, 30.43], "Ракитное": [49.69, 30.47], "Володарка": [49.53, 29.91], "Ставище": [49.39, 30.19], "Умань": [48.75, 30.22], "Жашков": [49.25, 30.11], "Тетиев": [49.37, 29.67], "Борисполь": [50.35, 30.95], "Переяслав": [50.07, 31.45], "Яготин": [50.28, 31.77], "Березань": [50.31, 31.47], "Барышевка": [50.36, 31.32], "Иванков": [50.93, 29.9], "Дымер": [50.79, 30.3], "Одесса": [46.4825, 30.7233], "Любашевка": [47.84, 30.26], "Киев": [50.4501, 30.5234]};
+const DAYS7 = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+const TG = { run: 0, pts: {}, cur: null, sets: {} };
+let tBranch = 'Харьков', tDay = DAYS7[(new Date().getDay() + 6) % 7], tSel = '', tHit = '', tMap = null, tLayer = null;
+const tKey = (b, n) => 'пункт:' + b + '|' + n;
+const plCity = b => String(b || '').replace(/\s*\(.*?\)\s*/g, '').trim();
+function tBranchC(b) {
+  const st = (TG.sets || {})[b] || {};
+  if (Array.isArray(st.wh_coords)) return st.wh_coords;
+  const g = TG.pts['склад:br:' + b]; if (g && g.manual && !g.nf) return [g.lat, g.lng];
+  return KNOWN_PL[plCity(b)] || null;
+}
+function tCoord(b, p) {
+  const g = TG.pts[tKey(b, p.name)];
+  if (g && g.manual && !g.nf) return [g.lat, g.lng];
+  const k = KNOWN_PL[p.name] || (p.alt && KNOWN_PL[p.alt]);
+  if (k) return k;
+  return g && !g.nf ? [g.lat, g.lng] : null;
+}
+const runsOn = (r, d) => !r.days.length || r.days.includes(d) || (r.days.includes('Будни') && DAYS7.indexOf(d) < 5);
+const tBooks = () => ((TG.cur && TG.cur.book && TG.cur.book.branches) || []);
+async function viewTrips() {
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('Карта перевозок', 'Карта перевезень')}</h1><div class="sub">${T('Межгородские маршруты филиалов по графику: от склада по населённым пунктам. Выберите филиал и день; найдите село — покажу, каким маршрутом и в какие дни туда возим.', 'Міжміські маршрути філій за графіком: від складу по населених пунктах. Виберіть філію й день; знайдіть село — покажу, яким маршрутом і в які дні туди возимо.')}</div></div></div>
+    <div id="t-body"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
+  let d;
+  try { d = await api('/logist/book', { method: 'POST', body: { action: 'points' } }); } catch (e) { $('#t-body').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return; }
+  TG.cur = d.current || {}; TG.sets = TG.cur.branches || {}; TG.pts = d.points || {};
+  const bs = tBooks();
+  if (!bs.length) { $('#t-body').innerHTML = `<div class="note">${T('Сначала загрузите «График маршрутов» в разделе «Маршруты и филиалы».', 'Спершу завантажте «Графік маршрутів» у розділі «Маршрути і філії».')} <a href="#book">${T('Перейти', 'Перейти')}</a></div>`; return; }
+  if (!bs.some(b => b.name === tBranch)) tBranch = bs[0].name;
+  $('#t-body').innerHTML = `<div class="bar"><label class="ck-line">${T('Филиал', 'Філія')}: <select class="in" id="t-br" style="width:auto">${bs.map(b => `<option ${b.name === tBranch ? 'selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
+      <span class="tabs" id="t-days">${DAYS7.map(x => `<button type="button" data-d="${x}">${x}</button>`).join('')}</span>
+      <span class="tsearch"><input class="in" id="t-q" placeholder="${esc(T('Как доставить в… (село или город)', 'Як доставити в… (село або місто)'))}" autocomplete="off"><span class="tres" id="t-res"></span></span></div>
+    <div class="work mt"><div class="sheets" id="t-list"></div><div><div class="mapbox"><div id="tmap" style="height:600px"></div></div><div class="geo-line" id="t-st"></div></div></div>`;
+  $('#t-br').onchange = e => { tBranch = e.target.value; tSel = ''; tHit = ''; tDraw(true); };
+  $('#t-days').onclick = e => { const b = e.target.closest('[data-d]'); if (!b) return; tDay = b.dataset.d; tSel = ''; tDraw(true); };
+  $('#t-list').onclick = e => { const b = e.target.closest('[data-tr]'); if (!b) return; tSel = tSel === b.dataset.tr ? '' : b.dataset.tr; tDraw(true); };
+  $('#t-q').oninput = tSearch;
+  document.addEventListener('click', e => { if (!e.target.closest('.tsearch') && $('#t-res')) $('#t-res').classList.remove('on'); });
+  if (tMap) { tMap.remove(); tMap = null; }
+  tMap = L.map('tmap').setView([49.2, 33.5], 7);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles © Esri' }).addTo(tMap);
+  tLayer = L.layerGroup().addTo(tMap);
+  tMap.on('popupopen', ev => { const a = ev.popup.getElement().querySelector('[data-treset]'); if (a) a.onclick = () => tReset(a.dataset.treset); });
+  tDraw(true);
+}
+function tRoutes() {
+  const b = tBooks().find(x => x.name === tBranch);
+  return b ? b.routes.filter(r => r.kind === 'route' && runsOn(r, tDay)) : [];
+}
+function nnOrder(start, pts) { const left = pts.slice(), out = []; let cur = start; while (left.length) { left.sort((a, b) => hav(cur, a.c) - hav(cur, b.c)); const p = left.shift(); out.push(p); cur = p.c; } return out; }
+function tDraw(fit) {
+  if (!tMap) return;
+  $$('#t-days button').forEach(b => b.classList.toggle('on', b.dataset.d === tDay));
+  const rs = tRoutes(), wh = tBranchC(tBranch);
+  $('#t-list').innerHTML = rs.length ? rs.map((r, i) => {
+    const miss = r.places.filter(p => !tCoord(tBranch, p)).length;
+    return `<button type="button" class="sh ${tSel === r.key ? 'on' : ''}" data-tr="${esc(r.key)}"><span class="t"><b><span class="sw" style="background:${RPAL[i % RPAL.length]}"></span>${esc(r.code)}</b>
+      <span>${esc(r.times.join(', '))}${r.times.length ? ' · ' : ''}${r.places.length} ${T('нп.', 'нп.')} · ${esc(r.days.join(' '))}</span><span>${r.places.map(p => esc(p.name)).join(', ')}</span>${miss ? `<span class="mu">${T('не на карте', 'не на карті')}: ${miss}</span>` : ''}</span></button>`; }).join('')
+    : `<div class="empty">${T('В этот день межгородских маршрутов нет', 'Цього дня міжміських маршрутів немає')}</div>`;
+  tLayer.clearLayers();
+  const bounds = [];
+  if (wh) { L.marker(wh, { icon: L.divIcon({ className: '', html: '<div class="mk wh">⌂</div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 1000 }).addTo(tLayer).bindPopup(`<b>${T('Склад', 'Склад')} ${esc(tBranch)}</b>${(TG.sets[tBranch] || {}).wh_coords ? '' : `<br><span style="color:#6b7280">${T('центр города — уточните склад в «Маршрутах и филиалах»', 'центр міста — уточніть склад у «Маршрутах і філіях»')}</span>`}`); bounds.push(wh); }
+  rs.forEach((r, i) => {
+    const on = tSel === r.key, dim = tSel && !on, col = RPAL[i % RPAL.length];
+    const pts = r.places.map(p => ({ p, c: tCoord(tBranch, p) })).filter(x => x.c);
+    const ord = wh ? nnOrder(wh, pts) : pts;
+    if (ord.length) L.polyline((wh ? [wh] : []).concat(ord.map(x => x.c)), { color: col, weight: on ? 6 : 3, opacity: dim ? .15 : .8 }).addTo(tLayer).bindTooltip(`${r.code} · ${r.places.length} ${T('нп.', 'нп.')}`, { sticky: true });
+    ord.forEach((x, j) => {
+      const hit = tHit && tHit === x.p.name, k = tKey(tBranch, x.p.name), g = TG.pts[k];
+      const html = on ? `<div class="mk num" style="background:${hit ? '#b42318' : col}">${j + 1}</div>` : `<div class="mk${hit ? ' hit' : ''}" style="background:${hit ? '#b42318' : col};opacity:${dim ? .3 : 1}"></div>`;
+      const sz = on ? 22 : hit ? 18 : 12;
+      const m = L.marker(x.c, { draggable: on, icon: L.divIcon({ className: '', html, iconSize: [sz, sz], iconAnchor: [sz / 2, sz / 2] }) }).addTo(tLayer);
+      m.bindPopup(`<b>${esc(x.p.name)}</b>${x.p.alt ? ' (' + esc(x.p.alt) + ')' : ''}<br>${esc(r.code)}<br><span style="color:#6b7280">${g && g.manual ? T('поставлено вручную', 'поставлено вручну') + (g.who ? ' — ' + esc(g.who) : '') : KNOWN_PL[x.p.name] || KNOWN_PL[x.p.alt] ? T('город из списка', 'місто зі списку') : esc(T('найдено: ', 'знайдено: ') + ((g && g.label) || ''))}</span>
+        ${on ? `<br><span style="color:#6b7280">${T('точку можно перетащить', 'точку можна перетягнути')}</span>` : ''}${g && g.manual ? `<div class="bar" style="margin-top:6px"><button class="btn sm" type="button" data-treset="${esc(k)}">${T('Вернуть найденную', 'Повернути знайдену')}</button></div>` : ''}`);
+      if (hit) m.openPopup && setTimeout(() => m.openPopup(), 50);
+      m.on('dragend', () => tSave(k, m.getLatLng()));
+      if (!tSel || on) bounds.push(x.c);
+    });
+  });
+  if (fit && bounds.length) tMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 11 });
+  tGeo();
+}
+async function tSave(k, ll) {
+  TG.pts[k] = Object.assign({}, TG.pts[k], { lat: ll.lat, lng: ll.lng, nf: false, manual: true, who: Auth.user ? Auth.user.full_name : '' });
+  tDraw(false);
+  try { await api('/logist/geo', { method: 'POST', body: { items: [{ q: k, lat: ll.lat, lng: ll.lng, house: false, label: T('вручную', 'вручну'), src: 'вручную', nf: false, manual: true }] } }); toast(T('Точка сохранена', 'Точку збережено')); }
+  catch (e) { toast(e.message); }
+}
+async function tReset(k) {
+  tMap.closePopup();
+  delete TG.pts[k];
+  try { await api('/logist/geo', { method: 'POST', body: { items: [{ q: k, reset: true }] } }); } catch (_) {}
+  tDraw(false);
+}
+async function tPlace(name, alt, near) {
+  const cand = [];
+  for (const n of [name, alt].filter(Boolean)) {
+    const n0 = lat(n).slice(0, 5);
+    try {
+      const d = await (await fetch('https://photon.komoot.io/api/?limit=10&lang=default&osm_tag=place&lat=' + near[0].toFixed(3) + '&lon=' + near[1].toFixed(3) + '&q=' + encodeURIComponent(n))).json();
+      for (const f of d.features || []) { const p = f.properties, c = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+        if ((p.countrycode || '').toUpperCase() === 'UA' && hav(near, c) <= 250 && lat(p.name || '').startsWith(n0)) cand.push({ lat: c[0], lng: c[1], label: [p.name, p.county, p.state].filter(Boolean).join(', ') }); }
+    } catch (_) {}
+    await sleep(1100);
+    if (cand.length) break;
+  }
+  if (!cand.length) return { nf: true, label: '', src: 'Photon2' };
+  cand.sort((a, b) => hav(near, [a.lat, a.lng]) - hav(near, [b.lat, b.lng]));
+  return { lat: cand[0].lat, lng: cand[0].lng, label: cand[0].label + (cand.length > 1 ? T(' (одноимённых: ', ' (однойменних: ') + cand.length + ')' : ''), src: 'Photon2', nf: false };
+}
+async function tGeo() {
+  const my = ++TG.run, b = tBranch, near0 = tBranchC(b) || KH;
+  const todo = [];
+  for (const r of tRoutes()) for (const p of r.places) { const k = tKey(b, p.name); if (!tCoord(b, p) && !(TG.pts[k] && TG.pts[k].nf) && !todo.some(x => x.k === k)) todo.push({ k, p, r }); }
+  const st = () => { const el = $('#t-st'); if (!el) return; const all = new Set(), nf = new Set();
+    tRoutes().forEach(r => r.places.forEach(p => { all.add(p.name); if (!tCoord(b, p)) nf.add(p.name); }));
+    el.innerHTML = `<span>${T('Населённых пунктов в этот день', 'Населених пунктів цього дня')}: ${all.size}${nf.size ? ` · ${T('не на карте', 'не на карті')}: ${[...nf].slice(0, 8).map(esc).join(', ')}${nf.size > 8 ? '…' : ''}` : ''}</span>`; };
+  if (!todo.length) return st();
+  let n = 0, batch = [];
+  for (const x of todo) {
+    if (my !== TG.run) return;
+    const el = $('#t-st'); if (el) el.innerHTML = `<span class="prog wide"><i style="width:${Math.round(n / todo.length * 100)}%"></i></span><span>${T('Ищу сёла на карте', 'Шукаю села на карті')}: ${++n} ${T('из', 'з')} ${todo.length}</span>`;
+    // тянем к уже известным точкам того же маршрута, иначе к филиалу
+    const known = x.r.places.map(p => tCoord(b, p)).filter(Boolean);
+    const near = known.length ? [known.reduce((a, c) => a + c[0], 0) / known.length, known.reduce((a, c) => a + c[1], 0) / known.length] : near0;
+    const g = await tPlace(x.p.name, x.p.alt, near);
+    if (my !== TG.run) return;
+    TG.pts[x.k] = g; batch.push({ q: x.k, lat: g.lat, lng: g.lng, house: false, label: g.label, src: g.src, nf: g.nf, manual: false });
+    if (batch.length >= 5 || n === todo.length) { const it = batch; batch = []; api('/logist/geo', { method: 'POST', body: { items: it } }).catch(() => {}); tDraw(false); return; }
+  }
+}
+function tSearch() {
+  const q = $('#t-q').value.trim(), box = $('#t-res');
+  if (q.length < 3) { box.classList.remove('on'); return; }
+  const q0 = lat(q).slice(0, 6), found = [];
+  for (const b of tBooks()) for (const r of b.routes) if (r.kind === 'route') for (const p of r.places)
+    if (lat(p.name).startsWith(q0) || (p.alt && lat(p.alt).startsWith(q0))) found.push({ b, r, p });
+  const items = found.slice(0, 40);
+  box.innerHTML = items.length ? items.map((x, i) => `<div data-i="${i}"><b>${esc(x.p.name)}</b>${x.p.alt ? ' (' + esc(x.p.alt) + ')' : ''} — ${esc(x.b.name)}, ${esc(x.r.code)}<br>
+    <span class="chips">${DAYS7.map(dd => `<i class="${runsOn(x.r, dd) ? 'on' : ''}">${dd}</i>`).join('')}</span></div>`).join('') : `<div class="mu">${T('Не нашёл в графике', 'Не знайшов у графіку')}</div>`;
+  box.classList.add('on');
+  box.onclick = e => {
+    const el = e.target.closest('[data-i]'); if (!el) return; const x = items[+el.dataset.i];
+    tBranch = x.b.name; if (!runsOn(x.r, tDay)) tDay = DAYS7.find(dd => runsOn(x.r, dd)) || tDay;
+    tSel = x.r.key; tHit = x.p.name; box.classList.remove('on');
+    $('#t-br').value = tBranch; tDraw(true);
   };
 }
 
