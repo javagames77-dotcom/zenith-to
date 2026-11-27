@@ -230,6 +230,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 <div class="layout">
   <nav class="side">
     <a href="#check" data-nav="check"></a>
+    <a href="#history" data-nav="history"></a>
     <a href="#fix" data-nav="fix"></a>
     <a href="#stats" data-nav="stats"></a>
     <a href="#zones" data-nav="zones"></a>
@@ -245,7 +246,7 @@ tr.er-row td:first-child { box-shadow: inset 3px 0 0 var(--er); }
 
 <script>
 'use strict';
-const APP_VERSION = 'm7';           // поднимать при каждой выкладке; видно внизу меню
+const APP_VERSION = 'm8';           // поднимать при каждой выкладке; видно внизу меню
 const API_BASE = 'https://primary-production-4b93e.up.railway.app/webhook';
 
 // ─── разбор Excel маршрутных листов ───────────────────────
@@ -287,7 +288,7 @@ const TI = (o, f) => lang === 'uk' && o[f + '_uk'] ? o[f + '_uk'] : o[f];   // �
 const lswHtml = () => `<span class="lsw"><button type="button" data-lang="uk" class="${lang === 'uk' ? 'on' : ''}">UA</button><button type="button" data-lang="ru" class="${lang === 'ru' ? 'on' : ''}">RU</button></span>`;
 function drawChrome() {
   const N = { check: T('Проверка листов', 'Перевірка листів'), fix: T('Исправить адрес в 1С', 'Виправити адресу в 1С'), stats: T('Итоги пилота', 'Підсумки пілоту'),
-    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С'), zones: T('Карты зон', 'Карти зон') };
+    help: T('Инструкция', 'Інструкція'), users: T('Пользователи', 'Користувачі'), data1c: T('Данные 1С', 'Дані 1С'), zones: T('Карты зон', 'Карти зон'), history: T('История проверок', 'Історія перевірок') };
   $$('.side a[data-nav]').forEach(a => { a.textContent = N[a.dataset.nav]; });
   $('.side').setAttribute('aria-label', T('Разделы', 'Розділи'));
   $('#logout').textContent = T('Выйти', 'Вийти');
@@ -313,7 +314,8 @@ const SRV_UK = { 'Нужно войти': 'Потрібно увійти', 'Вх
   'Загрузка уже идёт, подождите': 'Завантаження вже триває, зачекайте', 'Лимит 1С: не чаще раза в минуту. Попробуйте через минуту': 'Ліміт 1С: не частіше разу на хвилину. Спробуйте за хвилину',
   'Лимит 1С: не больше 3 загрузок в час. Попробуйте позже': 'Ліміт 1С: не більше 3 завантажень на годину. Спробуйте пізніше',
   'Лимит 1С на сутки почти исчерпан. Попробуйте завтра': 'Ліміт 1С на добу майже вичерпано. Спробуйте завтра', 'В ответе 1С нет клиентов': 'У відповіді 1С немає клієнтів',
-  'Не выбрано: будни или суббота': 'Не вибрано: будні чи субота', 'В файле нет зон (многоугольников)': 'У файлі немає зон (багатокутників)', 'Карта не найдена': 'Карту не знайдено' };
+  'Не выбрано: будни или суббота': 'Не вибрано: будні чи субота', 'В файле нет зон (многоугольников)': 'У файлі немає зон (багатокутників)', 'Карта не найдена': 'Карту не знайдено', 'Проверка не найдена': 'Перевірку не знайдено',
+  'Листов этой проверки уже нет в базе': 'Листів цієї перевірки вже немає в базі', 'Не указана проверка': 'Не вказано перевірку' };
 const trSrv = m => lang !== 'uk' || !m ? m : (SRV_UK[m] || String(m).replace(/^Ошибка 1С: /, 'Помилка 1С: ').replace(/^Слишком много неверных попыток\. Попробуйте через (\d+) мин\.$/, 'Забагато невдалих спроб. Спробуйте за $1 хв.'));
 
 // ─── API и вход ───────────────────────────────────────────
@@ -480,7 +482,7 @@ function route() {
   if ((r === 'users' || r === 'data1c') && !Auth.isAdmin()) r = 'check';
   $$('.side a[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === r));
   if (r !== 'check') Geo.pause = true;
-  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c, zones: viewZones }[r] || viewCheck)();
+  ({ check: viewCheck, fix: viewFix, stats: viewStats, users: viewUsers, help: viewHelp, data1c: viewData1c, zones: viewZones, history: viewHistory }[r] || viewCheck)();
 }
 window.addEventListener('hashchange', () => { if (Auth.token) route(); });
 
@@ -523,7 +525,7 @@ async function loadFile(f) {
   try {
     const d = await api('/logist/check', { method: 'POST', body: { file: f.name, sheets } });
     Geo.stop();
-    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, places: d.places || {}, file: f.name, at: Date.now() };
+    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, places: d.places || {}, who: Auth.user ? Auth.user.full_name : '', file: f.name, at: Date.now() };
     selSheet = null; tab = 'err';
     saveLast();
     drawReport();
@@ -578,7 +580,7 @@ function drawReport() {
   const rep = R.report, c = counts();
   const dates = [...new Set(rep.sheets.map(s => s.date))].join(', ');
   res.innerHTML = `
-    <div class="geo-line"><span>${T('Файл', 'Файл')}: <b>${esc(R.file || rep.file)}</b> · ${T('листы за', 'листи за')} ${esc(dates)}</span><span class="mu">${R.at ? T('проверено ', 'перевірено ') + fmtDT(R.at) : ''}</span></div>
+    <div class="geo-line"><span>${T('Файл', 'Файл')}: <b>${esc(R.file || rep.file)}</b> · ${T('листы за', 'листи за')} ${esc(dates)}</span><span class="mu">${R.at ? T('проверено ', 'перевірено ') + fmtDT(R.at) : ''}${R.who ? ' · ' + esc(R.who) : ''}${R.hist ? ` · <a href="#history">${T('из истории', 'з історії')}</a>` : ''}</span></div>
     <div class="kpi mt" id="kpi"></div>
     <div class="work">
       <div class="sheets" id="sheets"></div>
@@ -647,12 +649,13 @@ function issHtml(i) {
   const verd = i.sev === 'err' ? `<div class="verd" data-key="${esc(i.key)}">
       <button class="btn sm ${m.verdict === 'ok' ? 'on-ok' : ''}" type="button" data-v="ok">${T('Верно', 'Вірно')}</button>
       <button class="btn sm ${m.verdict === 'false' ? 'on-false' : ''}" type="button" data-v="false">${T('Ложная тревога', 'Хибна тривога')}</button>
-      <input class="in" type="text" placeholder="${T('комментарий', 'коментар')}" value="${esc(m.comment || '')}" data-c="1"></div>` : '';
+      <input class="in" type="text" placeholder="${T('комментарий', 'коментар')}" value="${esc(m.comment || '')}" data-c="1"></div>
+      ${m.verdict && m.who ? `<div class="mu small">${m.verdict === 'ok' ? T('Верно', 'Вірно') : T('Ложная тревога', 'Хибна тривога')} — ${esc(m.who)}${m.at ? ', ' + fmtDT(m.at) : ''}</div>` : ''}` : '';
   return `<div class="isx ${i.sev === 'err' ? 'er' : 'inf'}"><div class="ttl">${esc(TI(i, 'title'))}</div><div class="txt">${esc(TI(i, 'text'))}</div>${verd}</div>`;
 }
 async function saveMark(key, verdict, comment) {
   const prev = R.marks[key];
-  R.marks[key] = { verdict, comment }; saveLast();
+  R.marks[key] = { verdict, comment, who: Auth.user ? Auth.user.full_name : '', at: new Date().toISOString() }; saveLast();
   try { await api('/logist/mark', { method: 'POST', body: { key, verdict: verdict || '', comment: comment || '' } }); }
   catch (e) { R.marks[key] = prev; toast(e.message); drawRows(); }
 }
@@ -662,7 +665,7 @@ function onRowsClick(e) {
     const box = vb.closest('.verd'), key = box.dataset.key, m = R.marks[key] || {};
     const v = m.verdict === vb.dataset.v ? null : vb.dataset.v;
     saveMark(key, v, box.querySelector('[data-c]').value.trim());
-    box.querySelectorAll('[data-v]').forEach(b => { b.classList.toggle('on-ok', b.dataset.v === 'ok' && v === 'ok'); b.classList.toggle('on-false', b.dataset.v === 'false' && v === 'false'); });
+    drawRows(); drawSheets(); drawKpi();
     return;
   }
   const mb = e.target.closest('[data-manual]');
@@ -996,6 +999,53 @@ const Geo = {
   }
 };
 
+// ═══ История проверок ════════════════════════════════════
+let hDays = 14, hUser = '';
+async function viewHistory() {
+  $('#view').innerHTML = `<div class="hd"><div><h1>${T('История проверок', 'Історія перевірок')}</h1><div class="sub">${T('Все загрузки листов: кто, когда, что нашлось и что отмечено. Любую проверку можно открыть и продолжить отмечать.', 'Усі завантаження листів: хто, коли, що знайшлося і що позначено. Будь-яку перевірку можна відкрити й продовжити позначати.')}</div></div>
+    <div class="bar"><select class="in" id="h-days"><option value="7">${T('за 7 дней', 'за 7 днів')}</option><option value="14">${T('за 14 дней', 'за 14 днів')}</option><option value="31">${T('за месяц', 'за місяць')}</option><option value="92">${T('за 3 месяца', 'за 3 місяці')}</option></select>
+    <select class="in" id="h-user"><option value="">${T('все сотрудники', 'усі співробітники')}</option></select></div></div>
+    <div id="h-res"><div class="loading">${T('Загружаю…', 'Завантажую…')}</div></div>`;
+  $('#h-days').value = String(hDays);
+  $('#h-days').onchange = e => { hDays = +e.target.value; viewHistory(); };
+  try {
+    const d = await api('/logist/history', { method: 'POST', body: { days: hDays, user_id: hUser } });
+    $('#h-user').innerHTML += (d.users || []).map(u => `<option value="${u.id}">${esc(u.full_name)}</option>`).join('');
+    $('#h-user').value = hUser;
+    $('#h-user').onchange = e => { hUser = e.target.value; viewHistory(); };
+    const items = d.items || [];
+    if (!items.length) { $('#h-res').innerHTML = `<div class="empty card">${T('За этот период проверок нет', 'За цей період перевірок немає')}</div>`; return; }
+    // группируем по дню листов
+    const days = []; const byDay = {};
+    for (const x of items) { const k = x.day || '—'; if (!byDay[k]) { byDay[k] = []; days.push(k); } byDay[k].push(x); }
+    const out = [];
+    for (const k of days) {
+      out.push(`<tr class="day"><td colspan="8">${T('Листы за', 'Листи за')} ${esc(k)} · <button class="btn sm" type="button" data-hday="${esc(k)}">${T('Открыть весь день', 'Відкрити весь день')}</button></td></tr>`);
+      for (const x of byDay[k]) out.push(`<tr><td class="nw">${fmtDT(x.at)}</td><td>${esc(x.who || '—')}</td><td>${esc(x.file || '')}${x.dates && x.dates !== k ? `<div class="mu small">${T('листы за', 'листи за')} ${esc(x.dates)}</div>` : ''}</td>
+        <td>${x.sheets} / ${x.rows}</td><td class="${x.errors ? 'sum-er' : ''}">${x.errors}</td><td>${x.ok}</td><td>${x.false}</td>
+        <td>${x.unmarked ? `<span class="pill er">${x.unmarked} ${T('не отмечено', 'не позначено')}</span> ` : ''}<button class="btn sm" type="button" data-hup="${x.id}">${T('Открыть', 'Відкрити')}</button></td></tr>`);
+    }
+    $('#h-res').innerHTML = `<div class="tw"><table><thead><tr><th>${T('Когда', 'Коли')}</th><th>${T('Кто', 'Хто')}</th><th>${T('Файл', 'Файл')}</th><th>${T('Листов / накл.', 'Листів / накл.')}</th>
+      <th>${T('Ошибок', 'Помилок')}</th><th>${T('Верно', 'Вірно')}</th><th>${T('Ложных', 'Хибних')}</th><th></th></tr></thead><tbody>${out.join('')}</tbody></table></div>
+      <p class="mu small">${T('Если лист потом загрузили ещё раз, он показывается в последнем варианте.', 'Якщо лист потім завантажили ще раз, він показується в останньому варіанті.')}</p>`;
+    $('#h-res').onclick = e => {
+      const a = e.target.closest('[data-hup]'), b = e.target.closest('[data-hday]');
+      if (a) openReport({ upload_id: a.dataset.hup }); else if (b) openReport({ day: b.dataset.hday });
+    };
+  } catch (e) { $('#h-res').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+}
+async function openReport(q) {
+  toast(T('Открываю…', 'Відкриваю…'));
+  try {
+    const d = await api('/logist/report', { method: 'POST', body: q });
+    Geo.stop();
+    R = { report: d.report, marks: d.marks || {}, geo: d.geo || {}, zones: d.zones, warehouse: d.warehouse, warehouses: d.warehouses || {}, places: d.places || {},
+      file: q.day ? T('Все листы за ', 'Усі листи за ') + q.day : d.title, at: d.at, who: q.day ? '' : d.who, hist: true };
+    selSheet = null; tab = 'err'; saveLast();
+    if (location.hash === '#check') viewCheck(); else location.hash = '#check';
+  } catch (e) { toast(e.message); }
+}
+
 // ═══ Исправить адрес в 1С ═════════════════════════════════
 let fixDays = 7, fixShow = 'active', fixItems = [];
 async function viewFix() {
@@ -1118,6 +1168,8 @@ function viewHelp() {
       <li>Смотрите вкладку <b>«Ошибки»</b>. По каждой ошибке нажмите <b>«Верно»</b> или <b>«Ложная тревога»</b>, при желании напишите комментарий. Исправляйте в 1С как обычно.</li>
       <li>Вечером в «Итогах пилота» запишите, сколько минут ушло на проверку листов.</li>
     </ol>
+    <h2>История</h2>
+    <ul><li>«История проверок» — все загрузки: кто, когда, сколько ошибок и что отмечено. «Открыть» показывает отчёт со всеми отметками; «Открыть весь день» — все листы дня вместе. Под отметкой видно, кто и когда её поставил.</li></ul>
     <h2>Раз в неделю</h2>
     <ul><li>«Исправить адрес в 1С» → «Скачать Excel» и передайте менеджерам: у этих клиентов основной адрес в карточке неполный или не тот, а правильный каждый раз пишут в примечании.</li></ul>
     <h2>Что проверяет помощник</h2>
@@ -1153,6 +1205,8 @@ function viewHelp() {
       <li>Дивіться вкладку <b>«Помилки»</b>. Для кожної помилки натисніть <b>«Вірно»</b> або <b>«Хибна тривога»</b>, за бажання напишіть коментар. Виправляйте в 1С як звичайно.</li>
       <li>Увечері в «Підсумках пілоту» запишіть, скільки хвилин пішло на перевірку листів.</li>
     </ol>
+    <h2>Історія</h2>
+    <ul><li>«Історія перевірок» — усі завантаження: хто, коли, скільки помилок і що позначено. «Відкрити» показує звіт з усіма позначками; «Відкрити весь день» — усі листи дня разом. Під позначкою видно, хто й коли її поставив.</li></ul>
     <h2>Раз на тиждень</h2>
     <ul><li>«Виправити адресу в 1С» → «Завантажити Excel» і передайте менеджерам: у цих клієнтів основна адреса в картці неповна або не та, а правильну щоразу пишуть у примітці.</li></ul>
     <h2>Що перевіряє помічник</h2>
